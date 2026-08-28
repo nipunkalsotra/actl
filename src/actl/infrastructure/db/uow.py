@@ -11,6 +11,7 @@ from types import TracebackType
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from actl.infrastructure.db.engine import get_session_factory
+from actl.infrastructure.db.repositories.audit_checkpoints import AuditCheckpointRepository
 from actl.infrastructure.db.repositories.audit_log import AuditLogRepository
 from actl.infrastructure.db.repositories.decisions import DecisionRepository
 from actl.infrastructure.db.repositories.idempotency_keys import IdempotencyKeyRepository
@@ -31,6 +32,7 @@ class UnitOfWork:
     payments: PaymentRepository
     ledger_entries: LedgerEntryRepository
     audit_log: AuditLogRepository
+    audit_checkpoints: AuditCheckpointRepository
     outbox: OutboxRepository
     webhook_events: WebhookEventRepository
     idempotency_keys: IdempotencyKeyRepository
@@ -51,6 +53,7 @@ class UnitOfWork:
         self.payments = PaymentRepository(session)
         self.ledger_entries = LedgerEntryRepository(session)
         self.audit_log = AuditLogRepository(session)
+        self.audit_checkpoints = AuditCheckpointRepository(session)
         self.outbox = OutboxRepository(session)
         self.webhook_events = WebhookEventRepository(session)
         self.idempotency_keys = IdempotencyKeyRepository(session)

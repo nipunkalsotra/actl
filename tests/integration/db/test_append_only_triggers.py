@@ -11,6 +11,8 @@ $ psql ... DELETE FROM audit_log ...        -> ERROR: audit_log is append-only
 
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
@@ -22,16 +24,32 @@ pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
 async def _insert_seed_row(session: AsyncSession) -> int:
+    # Well-formed sha256:<64-hex> strings — not chain-verified (these tests
+    # only exercise the trigger), but must parse as real hashes: this row
+    # lands in the same shared audit_log table P3's chain reader scans for
+    # the current tail.
+    trace_id = new_id("trc")
+    entry_hash = f"sha256:{hashlib.sha256(trace_id.encode()).hexdigest()}"
+    # Explicit seq, not the BIGSERIAL default: P3's append service assigns
+    # seq explicitly too (§16.1), and the two must never be mixed — an
+    # explicit-seq insert never advances the underlying sequence object, so
+    # a later default-relying insert could collide with a taken seq.
     result = await session.execute(
         text(
             "INSERT INTO audit_log "
-            "(trace_id, actor_type, actor_id, action, subject, payload, "
+            "(seq, trace_id, actor_type, actor_id, action, subject, payload, "
             " payload_hash, prev_hash, entry_hash) "
-            "VALUES (:trace_id, 'system', 'sys', 'test.seed', '{}', '{}', "
-            "        'sha256:a', 'sha256:0', :entry_hash) "
+            "VALUES ((SELECT COALESCE(MAX(seq), 0) + 1 FROM audit_log), "
+            "        :trace_id, 'system', 'sys', 'test.seed', '{}', '{}', "
+            "        :payload_hash, :prev_hash, :entry_hash) "
             "RETURNING seq"
         ),
-        {"trace_id": new_id("trc"), "entry_hash": f"sha256:{new_id('trg')}"},
+        {
+            "trace_id": trace_id,
+            "payload_hash": f"sha256:{hashlib.sha256(b'trigger-test-payload').hexdigest()}",
+            "prev_hash": f"sha256:{hashlib.sha256(b'trigger-test-prev').hexdigest()}",
+            "entry_hash": entry_hash,
+        },
     )
     await session.commit()
     return result.scalar_one()  # type: ignore[no-any-return]
