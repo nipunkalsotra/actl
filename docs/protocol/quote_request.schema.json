@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/quote_request.schema.json",
+  "title": "actl.quote_request/v1",
+  "description": "§13.2 POST /agent/v1/quote request body.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sku", "mandate_id", "nights"],
+  "properties": {
+    "sku": { "type": "string", "minLength": 1 },
+    "mandate_id": { "type": "string", "minLength": 1 },
+    "nights": { "type": "integer", "exclusiveMinimum": 0 }
+  }
+}

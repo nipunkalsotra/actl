@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from actl.config import settings
+from actl.interfaces.http.routers import admin, catalog, well_known
 from actl.platform.logging import configure_logging, get_logger
 
 configure_logging(level=settings.log_level, json_format=settings.log_format == "json")
@@ -34,6 +35,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Agentic Commerce Trust Layer", lifespan=lifespan)
+app.include_router(catalog.router)
+app.include_router(admin.router)
+app.include_router(well_known.router)
 
 
 @app.get("/healthz")
