@@ -14,7 +14,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from actl.config import settings
+from actl.infrastructure.providers.factory import build_payment_provider
 from actl.interfaces.http.routers import admin, catalog, well_known
+from actl.interfaces.webhooks import razorpay as razorpay_webhooks
 from actl.platform.logging import configure_logging, get_logger
 
 configure_logging(level=settings.log_level, json_format=settings.log_format == "json")
@@ -25,12 +27,20 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = create_async_engine(settings.database_url, pool_size=settings.db_pool_size)
     app.state.redis_client = redis.from_url(settings.redis_url)
+    # §28 P5: built once here, outside `actl.interfaces`/`actl.application`
+    # (the import-linter contract's forbidden source_modules for reaching
+    # a concrete payment provider) and handed to routers via
+    # request.app.state, same as the engine and redis client above.
+    app.state.payment_provider = build_payment_provider(settings)
     logger.info("app.startup", app_env=settings.app_env)
     try:
         yield
     finally:
         await app.state.engine.dispose()
         await app.state.redis_client.aclose()
+        aclose = getattr(app.state.payment_provider, "aclose", None)
+        if aclose is not None:
+            await aclose()
         logger.info("app.shutdown")
 
 
@@ -38,6 +48,7 @@ app = FastAPI(title="Agentic Commerce Trust Layer", lifespan=lifespan)
 app.include_router(catalog.router)
 app.include_router(admin.router)
 app.include_router(well_known.router)
+app.include_router(razorpay_webhooks.router)
 
 
 @app.get("/healthz")

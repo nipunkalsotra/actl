@@ -1,0 +1,27 @@
+{
+  "event_id": "evt_test_001",
+  "signature": "8dfbc3f81aca31de5977d7f7130fb14997a0b120bac6f6786c8872e3ffd7be7c",
+  "body": {
+    "entity": "event",
+    "account_id": "acc_test_demo",
+    "event": "payment.captured",
+    "contains": [
+      "payment"
+    ],
+    "payload": {
+      "payment": {
+        "entity": {
+          "id": "pay_test_demo001",
+          "entity": "payment",
+          "amount": 100000,
+          "currency": "INR",
+          "status": "captured",
+          "order_id": "order_test_demo001",
+          "captured": true,
+          "method": "card"
+        }
+      }
+    },
+    "created_at": 1700000000
+  }
+}

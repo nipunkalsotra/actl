@@ -12,11 +12,15 @@ columns already carry the payment lifecycle).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from actl.infrastructure.db.models import OrderRow
+
+# §18.2 comment: "CREATED|AUTHORIZED|CAPTURED|FAILED|COMPENSATED"
+TERMINAL_STATUSES = ("CAPTURED", "FAILED", "COMPENSATED")
 
 
 @dataclass(frozen=True)
@@ -31,6 +35,9 @@ class OrderRecord:
     attempt_no: int
     idempotency_key: str
     provider_order_id: str | None = None
+    provider_payment_id: str | None = None
+    decline_reason: str | None = None
+    created_at: datetime | None = None
 
 
 def order_row_to_record(row: OrderRow) -> OrderRecord:
@@ -45,6 +52,9 @@ def order_row_to_record(row: OrderRow) -> OrderRecord:
         attempt_no=row.attempt_no,
         idempotency_key=row.idempotency_key,
         provider_order_id=row.provider_order_id,
+        provider_payment_id=row.provider_payment_id,
+        decline_reason=row.decline_reason,
+        created_at=row.created_at,
     )
 
 
@@ -53,6 +63,12 @@ class OrderRepository:
         self._session = session
 
     async def add(self, order: OrderRecord) -> None:
+        """`created_at` is taken from `order.created_at` when the caller
+        supplies one, never from the column's `server_default=func.now()`
+        — the reconciler compares `created_at` against an *injected*
+        Clock (§28 P5), and a DB-side wall-clock timestamp would silently
+        desync from a FrozenClock in tests (and from the real clock's
+        instant during a slow request in production)."""
         row = OrderRow(
             id=order.id,
             mandate_id=order.mandate_id,
@@ -65,6 +81,8 @@ class OrderRepository:
             idempotency_key=order.idempotency_key,
             provider_order_id=order.provider_order_id,
         )
+        if order.created_at is not None:
+            row.created_at = order.created_at
         self._session.add(row)
 
     async def get(self, order_id: str) -> OrderRecord | None:
@@ -77,3 +95,24 @@ class OrderRepository:
         )
         row = result.scalar_one_or_none()
         return order_row_to_record(row) if row is not None else None
+
+    async def set_provider_order_id(
+        self, order_id: str, provider_order_id: str, *, updated_at: datetime
+    ) -> None:
+        row = await self._session.get(OrderRow, order_id)
+        if row is None:
+            raise KeyError(order_id)
+        row.provider_order_id = provider_order_id
+        row.updated_at = updated_at
+
+    async def list_non_terminal_older_than(
+        self, cutoff: datetime, *, terminal_statuses: tuple[str, ...] = TERMINAL_STATUSES
+    ) -> list[OrderRecord]:
+        """§15.3 point 4 / §28 P5: the reconciler's own query — orders past
+        `reconcile_after_s` still sitting in a non-terminal status."""
+        result = await self._session.execute(
+            select(OrderRow).where(
+                OrderRow.status.notin_(terminal_statuses), OrderRow.created_at < cutoff
+            )
+        )
+        return [order_row_to_record(row) for row in result.scalars()]

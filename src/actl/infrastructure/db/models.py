@@ -186,6 +186,8 @@ class OrderRow(Base):
     attempt_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     idempotency_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     provider_order_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_payment_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decline_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
 
         DateTime(timezone=True), nullable=False, server_default=func.now()
