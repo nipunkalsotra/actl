@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings>=2.6",
     "structlog>=24.4",
     "redis>=5.2",
+    "httpx2>=2.12.0",
 ]
 
 [dependency-groups]
@@ -23,7 +24,6 @@ dev = [
     "import-linter>=2.1",
     "ruff>=0.7",
     "mypy>=1.13",
-    "httpx2>=2.12.0",
     "testcontainers[postgres]>=4.15.0",
     "jsonschema>=4.26.0",
 ]
@@ -60,6 +60,9 @@ warn_unused_ignores = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "--cov=actl --cov-report=term-missing"
+markers = [
+    "real_provider: makes a real network call to a live payment provider API; opt-in only, see tests/integration/payments/test_razorpay_live_smoke.py",
+]
 
 [tool.coverage.run]
 source = ["actl"]

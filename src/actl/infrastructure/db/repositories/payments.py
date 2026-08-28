@@ -7,6 +7,8 @@ payment-shaped view over the same rows `orders.py` writes, per §6.2's
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,9 +27,25 @@ class PaymentRepository:
         row = result.scalar_one_or_none()
         return order_row_to_record(row) if row is not None else None
 
-    async def mark_captured(self, order_id: str, provider_order_id: str) -> None:
+    async def transition_status(
+        self,
+        order_id: str,
+        status: str,
+        *,
+        updated_at: datetime,
+        provider_payment_id: str | None = None,
+        decline_reason: str | None = None,
+    ) -> None:
+        """AUTHORIZED/CAPTURED/FAILED/COMPENSATED — the payment-outcome
+        half of an order's lifecycle (§12.2). `provider_payment_id`/
+        `decline_reason` are set only when the caller actually has a new
+        value; omitting them leaves whatever was already recorded."""
         row = await self._session.get(OrderRow, order_id)
         if row is None:
             raise KeyError(order_id)
-        row.status = "CAPTURED"
-        row.provider_order_id = provider_order_id
+        row.status = status
+        row.updated_at = updated_at
+        if provider_payment_id is not None:
+            row.provider_payment_id = provider_payment_id
+        if decline_reason is not None:
+            row.decline_reason = decline_reason
