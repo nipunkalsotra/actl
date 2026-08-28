@@ -1,0 +1,15 @@
+{
+  "catalog_version": 118,
+  "category": "travel.hotel",
+  "currency": "INR",
+  "current_total_minor": 900000,
+  "intent_hash": "sha256:0d4fcc4115e8dcb0f390a1260df202bd218727fd93d68b67879085054357ec3f",
+  "mandate_spec_hash": "sha256:c9808424badc6a97f0644d255eb49be2a266b60191908720c5d05287f4d6fa9d",
+  "merchant": "good_merchant",
+  "nights": 3,
+  "quoted_total_minor": 900000,
+  "refundable": true,
+  "rooms": 1,
+  "total_minor": 900000,
+  "unit_price_minor": 500000
+}

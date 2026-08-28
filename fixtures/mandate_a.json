@@ -1,0 +1,44 @@
+{
+  "bounds": {
+    "allowed_categories": [
+      "travel.hotel"
+    ],
+    "blocked_merchants": [],
+    "currency": "INR",
+    "max_price_delta_bps": 0,
+    "max_total_minor": 1000000,
+    "max_transactions": 1,
+    "max_unit_minor": 300000,
+    "require_refundable": true
+  },
+  "controls": {
+    "human_confirm_required": true,
+    "revocable": true
+  },
+  "delegate": {
+    "id": "agt_buyer_01",
+    "key_id": "ed25519:9f31c2",
+    "type": "agent"
+  },
+  "intent": {
+    "category": "travel.hotel",
+    "check_in": "2026-09-12",
+    "location": "Goa, IN",
+    "nights": 3,
+    "rooms": 1
+  },
+  "mandate_id": "mdt_01JX8Z6QK4T2N9V0",
+  "principal": {
+    "id": "usr_7QP2",
+    "type": "human"
+  },
+  "schema": "actl.mandate/v1",
+  "signature": null,
+  "spec_hash": "sha256:c9808424badc6a97f0644d255eb49be2a266b60191908720c5d05287f4d6fa9d",
+  "temporal": {
+    "expires_at": "2027-01-01T00:00:00Z",
+    "not_before": "2026-01-01T00:00:00Z",
+    "quote_ttl_s": 120
+  },
+  "version": 1
+}
