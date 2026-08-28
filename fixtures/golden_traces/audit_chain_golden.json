@@ -1,0 +1,77 @@
+{
+  "description": "Golden trace: fixed sequence of audit entries with pre-computed expected hashes. Byte-identical entry_hash/merkle_root across every run is what this fixture pins down.",
+  "entries": [
+    {
+      "trace_id": "trc_01JX8Z7C1M4RQ",
+      "actor_type": "human",
+      "actor_id": "usr_7QP2",
+      "action": "mandate.locked",
+      "subject": {
+        "mandate_id": "mdt_01JX8Z6QK4T2N9V0"
+      },
+      "payload": {
+        "spec_hash": "sha256:6f1bc904",
+        "max_total_minor": 900000,
+        "currency": "INR"
+      },
+      "payload_hash": "sha256:0381369704b9325e9cf6e9517beb9aa088e7cbd7b915ebe62c6ab06bbebf845e",
+      "prev_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "entry_hash": "sha256:163c35071aa6d15820bb424503c36264808b9f5bf757ea4aefe6ebf2b0d8f8a7"
+    },
+    {
+      "trace_id": "trc_01JX8Z7C1M4RQ",
+      "actor_type": "agent",
+      "actor_id": "agt_merchant_01",
+      "action": "policy.decision",
+      "subject": {
+        "decision_id": "dec_01JX8Z7B3C",
+        "order_id": "ord_01JX8Z7B9"
+      },
+      "payload": {
+        "verdict": "ALLOW",
+        "reason_codes": [
+          "OK"
+        ]
+      },
+      "payload_hash": "sha256:c46207253d00e55e25967edeb4ada465afec8e7c0622d2c1729f56c0490d88de",
+      "prev_hash": "sha256:163c35071aa6d15820bb424503c36264808b9f5bf757ea4aefe6ebf2b0d8f8a7",
+      "entry_hash": "sha256:4e54b79bed83350c3e0e7eaf546669c54b84b88fd8dfd92db7d5a006e6051514"
+    },
+    {
+      "trace_id": "trc_01JX8Z7C1M4RQ",
+      "actor_type": "agent",
+      "actor_id": "agt_merchant_01",
+      "action": "payment.intent",
+      "subject": {
+        "order_id": "ord_01JX8Z7B9",
+        "mandate_id": "mdt_01JX8Z6QK4T2N9V0"
+      },
+      "payload": {
+        "amount_minor": 840000,
+        "currency": "INR",
+        "idempotency_key": "ik_9f2c"
+      },
+      "payload_hash": "sha256:c53e5111f1a90903517c59097c47ef8985b117ab726297349c158a5b3afd7d85",
+      "prev_hash": "sha256:4e54b79bed83350c3e0e7eaf546669c54b84b88fd8dfd92db7d5a006e6051514",
+      "entry_hash": "sha256:37794931f11cbc8e14c59785c2718c4db51b626e10af244ad9020f14d75158bc"
+    },
+    {
+      "trace_id": "trc_01JX8Z7C1M4RQ",
+      "actor_type": "system",
+      "actor_id": "razorpay_webhook",
+      "action": "payment.result",
+      "subject": {
+        "order_id": "ord_01JX8Z7B9"
+      },
+      "payload": {
+        "provider_payment_id": "pay_test_001",
+        "status": "captured"
+      },
+      "payload_hash": "sha256:535e8ca8dbbf39b66475a816c686bdff3daca68512097b0bde239919ef983bc0",
+      "prev_hash": "sha256:37794931f11cbc8e14c59785c2718c4db51b626e10af244ad9020f14d75158bc",
+      "entry_hash": "sha256:2d8b535ff177fd8760a4e321b3131f1fb3bbcd63d1d9a59c84538006afb768cf"
+    }
+  ],
+  "merkle_root": "sha256:b142ab83fcbcc27c7668b2861aa285c2ea562619e6956e53fb4be019d80dcb64",
+  "head_entry_hash": "sha256:2d8b535ff177fd8760a4e321b3131f1fb3bbcd63d1d9a59c84538006afb768cf"
+}

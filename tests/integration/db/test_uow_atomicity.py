@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -54,7 +56,14 @@ async def test_commit_writes_state_audit_and_event(
 ) -> None:
     mandate = make_locked_mandate()
     aggregate_id = new_id("evt")
-    entry_hash = f"sha256:{mandate.mandate_id}"
+    # Well-formed sha256:<64-hex> strings — not chain-verified (this test
+    # only checks UoW atomicity), but must parse as real hashes: P3's
+    # chain reader treats every audit_log row as a real link when it scans
+    # the table for the current tail, and this row lands in the same
+    # shared table other tests' chains build on.
+    entry_hash = f"sha256:{hashlib.sha256(mandate.mandate_id.encode()).hexdigest()}"
+    prev_hash = f"sha256:{hashlib.sha256(b'uow-atomicity-test-prev').hexdigest()}"
+    payload_hash = f"sha256:{hashlib.sha256(b'uow-atomicity-test-payload').hexdigest()}"
 
     async with UnitOfWork(session_factory) as uow:
         await uow.mandates.add(mandate, MandateStatus.LOCKED)
@@ -66,8 +75,8 @@ async def test_commit_writes_state_audit_and_event(
                 action="mandate.locked",
                 subject={"mandate_id": mandate.mandate_id},
                 payload={"spec_hash": mandate.spec_hash},
-                payload_hash="sha256:test",
-                prev_hash="sha256:0",
+                payload_hash=payload_hash,
+                prev_hash=prev_hash,
                 entry_hash=entry_hash,
             )
         )
