@@ -24,6 +24,7 @@ dev = [
     "ruff>=0.7",
     "mypy>=1.13",
     "httpx2>=2.12.0",
+    "testcontainers[postgres]>=4.15.0",
 ]
 
 [build-system]
