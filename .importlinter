@@ -1,0 +1,37 @@
+# .importlinter — these contracts run in CI and fail the build on violation
+[importlinter]
+root_package = actl
+include_external_packages = True
+
+[importlinter:contract:1]
+name = Domain is pure
+type = forbidden
+source_modules =
+    actl.domain
+forbidden_modules =
+    actl.infrastructure
+    actl.interfaces
+    sqlalchemy
+    httpx
+    redis
+    razorpay
+    groq
+
+[importlinter:contract:2]
+name = Layers point inward
+type = layers
+layers =
+    actl.interfaces
+    actl.application
+    actl.domain
+
+[importlinter:contract:3]
+name = Only the gate may reach a payment provider
+type = forbidden
+source_modules =
+    actl.interfaces
+    actl.domain
+    actl.application.agents
+    actl.application.conversation
+forbidden_modules =
+    actl.infrastructure.providers.razorpay
