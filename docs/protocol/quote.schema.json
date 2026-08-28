@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/quote.schema.json",
+  "title": "actl.quote/v1",
+  "description": "§8.4 / §13.2 Quote object: POST /agent/v1/quote response body.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "quote_id", "sku", "mandate_id", "unit_price_minor", "nights",
+    "total_minor", "currency", "catalog_version", "refundable", "expires_at",
+    "quote_token", "quote_hash"
+  ],
+  "properties": {
+    "schema": { "const": "actl.quote/v1" },
+    "quote_id": { "type": "string", "minLength": 1 },
+    "sku": { "type": "string", "minLength": 1 },
+    "mandate_id": { "type": "string", "minLength": 1 },
+    "unit_price_minor": { "type": "integer", "exclusiveMinimum": 0 },
+    "nights": { "type": "integer", "exclusiveMinimum": 0 },
+    "total_minor": { "type": "integer", "exclusiveMinimum": 0 },
+    "currency": { "const": "INR" },
+    "catalog_version": { "type": "integer", "minimum": 1 },
+    "refundable": { "type": "boolean" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "quote_token": { "type": "string", "pattern": "^qt_v1\\..+\\..+$" },
+    "quote_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

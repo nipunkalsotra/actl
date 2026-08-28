@@ -25,6 +25,7 @@ dev = [
     "mypy>=1.13",
     "httpx2>=2.12.0",
     "testcontainers[postgres]>=4.15.0",
+    "jsonschema>=4.26.0",
 ]
 
 [build-system]
@@ -41,6 +42,12 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "C4", "SIM", "RUF"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's own dependency-injection idiom (`= Depends(...)`, `= Query(...)`)
+# relies on a call in the default; these are the framework's documented
+# pattern, not the mutable-default footgun B008 exists to catch.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Body"]
 
 [tool.mypy]
 python_version = "3.12"

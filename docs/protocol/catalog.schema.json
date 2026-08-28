@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/catalog.schema.json",
+  "title": "actl.catalog/v1",
+  "description": "§13.1 GET /agent/v1/catalog response envelope. No item carries a free-text description field -- every commercially relevant fact is a typed field (§21.3).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "catalog_version", "generated_at", "currency", "items", "next_cursor"],
+  "properties": {
+    "schema": { "const": "actl.catalog/v1" },
+    "catalog_version": { "type": "integer", "minimum": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "currency": { "const": "INR" },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/catalogItem" }
+    },
+    "next_cursor": { "type": ["string", "null"] }
+  },
+  "$defs": {
+    "catalogItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sku", "category", "merchant_id", "unit", "unit_price_minor",
+        "available_units", "location", "attributes", "policy", "version",
+        "quote_required"
+      ],
+      "properties": {
+        "sku": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "merchant_id": { "type": "string", "minLength": 1 },
+        "unit": { "type": "string", "minLength": 1 },
+        "unit_price_minor": { "type": "integer", "exclusiveMinimum": 0 },
+        "available_units": { "type": "integer", "minimum": 0 },
+        "location": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["city", "country"],
+          "properties": {
+            "city": { "type": "string", "minLength": 1 },
+            "country": { "type": "string", "minLength": 1 }
+          }
+        },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rating", "sea_facing", "breakfast_included"],
+          "properties": {
+            "rating": { "type": "number", "minimum": 0, "maximum": 5 },
+            "sea_facing": { "type": "boolean" },
+            "breakfast_included": { "type": "boolean" }
+          }
+        },
+        "policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "refundable", "cancellation_window_h", "instant_confirm", "taxes_included"
+          ],
+          "properties": {
+            "refundable": { "type": "boolean" },
+            "cancellation_window_h": { "type": "integer", "minimum": 0 },
+            "instant_confirm": { "type": "boolean" },
+            "taxes_included": { "type": "boolean" }
+          }
+        },
+        "version": { "type": "integer", "minimum": 1 },
+        "quote_required": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     anchor_rpc_url: str = ""
     agent_signing_alg: str = "ed25519"
 
+    # ---- agent commerce protocol (§13, §14) ------------------------------------
+    # HMAC-SHA256 is §14.1's documented development fallback; this is a
+    # 100%-test-mode build, so it is what's actually wired up for
+    # quote_token signing (P4). Ed25519 arrives with P7's agent identity
+    # registry. Placeholder values, same spirit as the Razorpay test key.
+    quote_signing_key: str = "demo-quote-signing-key-change-me"
+    admin_token: str = "demo-admin-token-change-me"
+
 
 def _enforce_test_mode(s: Settings) -> None:
     """§21.4 — fail closed, loudly. Runs at import time, before any router is

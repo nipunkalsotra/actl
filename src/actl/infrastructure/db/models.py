@@ -15,6 +15,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Text,
@@ -119,6 +120,56 @@ class QuoteRow(Base):
     __table_args__ = (
         CheckConstraint("unit_price_minor > 0", name="quotes_unit_price_minor_positive"),
         CheckConstraint("total_minor > 0", name="quotes_total_minor_positive"),
+    )
+
+
+class CatalogMetaRow(Base):
+    """§13.1 — the single global, monotonic catalog_version counter. Always
+    exactly one row (id='default'), inserted by migrations/versions/0003_catalog.py."""
+
+    __tablename__ = "catalog_meta"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class CatalogItemRow(Base):
+    """§13.1 catalog item. `location`/`attributes`/`policy` are flattened
+    into individual typed columns rather than JSONB — every one of them is
+    filterable/sortable in this build (category, location, price), and
+    flattening keeps that a real SQL WHERE/ORDER BY instead of a JSONB
+    operator query. Not in §18.2 (written before P4 was scoped)."""
+
+    __tablename__ = "catalog_items"
+
+    sku: Mapped[str] = mapped_column(Text, primary_key=True)
+    category: Mapped[str] = mapped_column(Text, nullable=False)
+    merchant_id: Mapped[str] = mapped_column(Text, nullable=False)
+    unit: Mapped[str] = mapped_column(Text, nullable=False)
+    unit_price_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    available_units: Mapped[int] = mapped_column(Integer, nullable=False)
+    location_city: Mapped[str] = mapped_column(Text, nullable=False)
+    location_country: Mapped[str] = mapped_column(Text, nullable=False)
+    rating: Mapped[float] = mapped_column(Float, nullable=False)
+    sea_facing: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    breakfast_included: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    refundable: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    cancellation_window_h: Mapped[int] = mapped_column(Integer, nullable=False)
+    instant_confirm: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    taxes_included: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    quote_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "unit_price_minor > 0", name="catalog_items_unit_price_minor_positive"
+        ),
+        CheckConstraint(
+            "available_units >= 0", name="catalog_items_available_units_non_negative"
+        ),
     )
 
 

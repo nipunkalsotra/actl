@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/agent-commerce.schema.json",
+  "title": "actl.agent-commerce/v1",
+  "description": "§13.1 / Appendix A GET /.well-known/agent-commerce.json capability discovery document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "currency", "endpoints", "signing", "limits"],
+  "properties": {
+    "protocol": { "type": "string", "minLength": 1 },
+    "currency": { "const": "INR" },
+    "endpoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog", "quote"],
+      "properties": {
+        "catalog": { "type": "string", "minLength": 1 },
+        "quote": { "type": "string", "minLength": 1 }
+      }
+    },
+    "signing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithms"],
+      "properties": {
+        "algorithms": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quote_ttl_s"],
+      "properties": {
+        "quote_ttl_s": { "type": "integer", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

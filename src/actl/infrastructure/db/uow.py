@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from actl.infrastructure.db.engine import get_session_factory
 from actl.infrastructure.db.repositories.audit_checkpoints import AuditCheckpointRepository
 from actl.infrastructure.db.repositories.audit_log import AuditLogRepository
+from actl.infrastructure.db.repositories.catalog import CatalogRepository
 from actl.infrastructure.db.repositories.decisions import DecisionRepository
 from actl.infrastructure.db.repositories.idempotency_keys import IdempotencyKeyRepository
 from actl.infrastructure.db.repositories.ledger_entries import LedgerEntryRepository
@@ -26,6 +27,7 @@ from actl.infrastructure.db.repositories.webhook_events import WebhookEventRepos
 
 class UnitOfWork:
     mandates: MandateRepository
+    catalog: CatalogRepository
     decisions: DecisionRepository
     quotes: QuoteRepository
     orders: OrderRepository
@@ -47,6 +49,7 @@ class UnitOfWork:
         self._committed = False
         session = self._session
         self.mandates = MandateRepository(session)
+        self.catalog = CatalogRepository(session)
         self.decisions = DecisionRepository(session)
         self.quotes = QuoteRepository(session)
         self.orders = OrderRepository(session)
