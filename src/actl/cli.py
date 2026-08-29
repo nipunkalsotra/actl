@@ -15,6 +15,9 @@ import sys
 from pathlib import Path
 
 from actl.application.audit_service import ChainVerificationResult, verify_chain
+from actl.application.growth.events import ARM_UPSELL
+from actl.application.growth.metrics import ArmMetrics, GrowthMetrics, compute_growth_metrics
+from actl.application.growth.simulation import SessionOutcome, run_growth_simulation
 from actl.application.payment_service import WebhookReceipt, process_webhook_delivery
 from actl.application.ports import ProviderOrder
 from actl.config import settings
@@ -22,8 +25,11 @@ from actl.domain.mandate.models import Mandate
 from actl.domain.policy.engine import evaluate
 from actl.domain.policy.reason_codes import ReasonCode
 from actl.domain.policy.rules import PolicyContext, PurchaseIntent
+from actl.infrastructure.db.engine import get_session_factory
 from actl.infrastructure.db.uow import UnitOfWork
 from actl.infrastructure.providers.factory import build_payment_provider
+from actl.infrastructure.providers.simulator.adapter import SimulatorAdapter
+from actl.platform.breaker import CircuitBreaker
 from actl.platform.clock import SystemClock
 from actl.platform.ids import new_id
 
@@ -165,6 +171,51 @@ def _replay_webhook(fixture_path: Path) -> int:
     return 0
 
 
+def _format_arm(arm: ArmMetrics) -> str:
+    aov = f"{arm.aov_minor / 100:,.2f}" if arm.aov_minor is not None else "n/a"
+    attach = f"{arm.attach_rate:.1%}" if arm.attach_rate is not None else "n/a"
+    return (
+        f"arm={arm.arm:<10s} conv={arm.conversion_rate:.1%}  aov={aov:>10s}  "
+        f"attach={attach:>6s}  n={arm.sessions}"
+    )
+
+
+def _growth(seed: str, sessions: int) -> int:
+    """§28 P8 instruction 9: `actl growth --seed demo --sessions N`. Real
+    P4-P7 deterministic flow, SimulatorAdapter only -- never Razorpay,
+    never Groq (`application.growth.simulation` never imports either)."""
+
+    async def _run() -> tuple[list[SessionOutcome], GrowthMetrics]:
+        session_factory = get_session_factory()
+        provider = SimulatorAdapter(clock=SystemClock())
+        clock = SystemClock()
+        breaker = CircuitBreaker(name="growth-simulator", clock=clock)
+        outcomes = await run_growth_simulation(
+            session_factory, provider, clock, breaker, seed=seed, sessions=sessions
+        )
+        async with UnitOfWork(session_factory) as uow:
+            metrics = await compute_growth_metrics(uow)
+        return outcomes, metrics
+
+    outcomes, metrics = asyncio.run(_run())
+
+    denied_upsells = sum(
+        1
+        for o in outcomes
+        if o.arm == ARM_UPSELL and o.upsell_accepted and o.upsell_order_id is None
+    )
+
+    print(_format_arm(metrics.baseline))
+    print(_format_arm(metrics.upsell))
+    uplift = metrics.revenue_uplift
+    uplift_str = f"{uplift:+.1%}" if uplift is not None else "n/a"
+    print(
+        f"revenue uplift {uplift_str}   "
+        f"(bounds still enforced: {denied_upsells} upsells denied at G4)"
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="actl")
     parser.add_argument("--version", action="version", version="actl 0.1.0")
@@ -194,6 +245,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     replay_webhook_parser.add_argument("fixture_path", type=Path)
 
+    growth_parser = subparsers.add_parser(
+        "growth", help="run N seeded upsell-on/off sessions and print both arms (§28 P8)"
+    )
+    growth_parser.add_argument("--seed", type=str, required=True)
+    growth_parser.add_argument("--sessions", type=int, required=True)
+
     return parser
 
 
@@ -210,6 +267,8 @@ def main() -> None:
         sys.exit(_provider_smoke(args.amount))
     if args.command == "replay-webhook":
         sys.exit(_replay_webhook(args.fixture_path))
+    if args.command == "growth":
+        sys.exit(_growth(args.seed, args.sessions))
     parser.print_help()
 
 

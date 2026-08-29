@@ -1,0 +1,13 @@
+{
+  "_scenario": "u2_valid_ranking",
+  "response": {
+    "ranked_skus": [
+      "HTL-GOA-BEACH-SUITE",
+      "HTL-GOA-SEA-DLX",
+      "HTL-GOA-GARDEN-STD"
+    ],
+    "rationale": {
+      "HTL-GOA-BEACH-SUITE": "highest rated sea-facing option"
+    }
+  }
+}

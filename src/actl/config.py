@@ -36,8 +36,15 @@ class Settings(BaseSettings):
     reconcile_after_s: int = 45
 
     # ---- llm ----------------------------------------------------------------
+    # §28 P8 locks GROQ_MODEL=llama-3.3-70b-versatile, but Groq retired that
+    # model for free/developer-tier accounts on 2026-08-16 (confirmed on
+    # console.groq.com/docs/deprecations, 13 days before this phase was
+    # built) -- this is a 100%-free-tier build, so the literal architecture
+    # value would fail at the API boundary on every live (non-replay) call.
+    # openai/gpt-oss-120b is Groq's own primary recommended replacement,
+    # confirmed to support JSON mode; see docs/adr/0009-p8-llm-decisions.md.
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
     llm_enabled: bool = True
     llm_timeout_s: int = 12
     llm_max_calls_per_txn: int = 3

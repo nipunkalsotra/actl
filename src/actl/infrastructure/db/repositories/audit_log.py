@@ -18,7 +18,7 @@ import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from actl.infrastructure.db.models import AuditLogRow
@@ -168,6 +168,20 @@ class AuditLogRepository:
     async def get_by_seq(self, seq: int) -> AuditLogRecord | None:
         row = await self._session.get(AuditLogRow, seq)
         return _to_record(row) if row is not None else None
+
+    async def update_narration(self, seq: int, narration: str) -> None:
+        """§28 P8 instruction 4 / U3: touches ONLY the `narration` column.
+        The database's own append-only trigger (migrations/versions/
+        0002_audit_outbox.py) carves out exactly this: an UPDATE is
+        allowed through when narration is the *sole* changed column,
+        checked by comparing the whole row minus narration -- and a
+        SQLAlchemy Core `update()` naturally SETs only the column named in
+        `.values(...)`, so `entry_hash`/`prev_hash`/`payload`/every other
+        field is structurally untouched by this call, not just by
+        convention."""
+        await self._session.execute(
+            update(AuditLogRow).where(AuditLogRow.seq == seq).values(narration=narration)
+        )
 
     async def get_seq_range_for_order(self, order_id: str) -> tuple[int, int] | None:
         """§14 order.status / receipt.issue: "audit sequence range". Uses

@@ -1,0 +1,10 @@
+{
+  "_scenario": "u2_hallucinated_sku",
+  "response": {
+    "ranked_skus": [
+      "HTL-GOA-SEA-DLX",
+      "HTL-SECRET-DISCOUNT-SUITE"
+    ],
+    "rationale": {}
+  }
+}

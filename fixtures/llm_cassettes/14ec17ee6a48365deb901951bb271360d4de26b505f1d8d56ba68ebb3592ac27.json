@@ -1,0 +1,16 @@
+{
+  "_scenario": "u1_complete_extraction",
+  "response": {
+    "category": "travel.hotel",
+    "location": "Goa",
+    "check_in": "2026-09-12",
+    "nights": 3,
+    "rooms": 1,
+    "currency": "INR",
+    "max_total_minor_evidence": {
+      "numeral_text": "5000",
+      "start": 67,
+      "end": 71
+    }
+  }
+}
