@@ -373,3 +373,19 @@ class AgentIdentityRow(Base):
             name="agent_identities_key_material_check",
         ),
     )
+
+
+class IntegrityHaltRow(Base):
+    """§20 F10 -- the single durable, cross-process halt row (id='default'),
+    same precedent as `CatalogMetaRow`. Inserted by migrations/versions/
+    0007_integrity_halt.py. See docs/adr/0010 decision 16."""
+
+    __tablename__ = "integrity_halt"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    halted: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tripped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    tripped_seq: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    cleared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cleared_by: Mapped[str | None] = mapped_column(Text, nullable=True)

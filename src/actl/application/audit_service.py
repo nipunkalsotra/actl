@@ -34,6 +34,7 @@ from actl.domain.audit.merkle import merkle_root
 from actl.infrastructure.db.repositories.audit_checkpoints import AuditCheckpointRecord
 from actl.infrastructure.db.repositories.audit_log import AuditLogRecord
 from actl.infrastructure.db.uow import UnitOfWork
+from actl.platform.clock import Clock
 
 DEFAULT_CHAIN_ID = "actl.audit_log"
 
@@ -254,3 +255,29 @@ async def verify_chain(uow: UnitOfWork, from_seq: int, to_seq: int) -> ChainVeri
         checkpoints_matched=checkpoints_matched,
         head_entry_hash=head,
     )
+
+
+async def verify_chain_and_halt_on_failure(
+    uow: UnitOfWork, from_seq: int, to_seq: int, clock: Clock
+) -> ChainVerificationResult:
+    """§20 F10: "Detection: Verifier ... Response: Halt all money
+    actions." A thin wrapper, not a change to `verify_chain` itself (which
+    stays pure/read-only, unmodified, so every existing P3 caller and test
+    keeps its exact behaviour) -- this is the one place that ties a real
+    integrity-verification run to the durable `integrity_halt` row (§28
+    P9 production-readiness correction, docs/adr/0010 decision 16).
+    `actl verify-chain` and the demo/chaos F10 scenario both call this
+    instead of the bare `verify_chain`; any other caller that only wants
+    the read-only check keeps calling `verify_chain` directly.
+
+    Caller commits, matching every other write in this module (`append_
+    entry`'s own "caller commits; this function never does") -- the trip
+    must be durable the moment this returns, so every caller of this
+    specific function is expected to commit immediately, not batch it
+    with unrelated work."""
+    result = await verify_chain(uow, from_seq, to_seq)
+    if not result.ok:
+        b = result.break_
+        reason = b.reason if b is not None else "audit chain verification failed"
+        await uow.integrity.trip(reason=reason, tripped_seq=b.seq if b else None, now=clock.now())
+    return result

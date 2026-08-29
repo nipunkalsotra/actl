@@ -1,0 +1,53 @@
+{
+  "detected_fault": "UNIT_CAP_EXCEEDED",
+  "entries": [
+    {
+      "action": "quote.issued",
+      "actor_id": "agt_demo_over_cap",
+      "actor_type": "agent",
+      "entry_hash": "sha256:20f36f85caedf32def760b76cc7c6b0c82d821cd6c39d57b64780fe5480dcfb3",
+      "payload": {
+        "catalog_version": 1,
+        "expires_at": "2026-01-15T09:02:00+00:00",
+        "price_minor": 500000,
+        "sku": "HTL-DEMO-OVERCAP"
+      },
+      "payload_hash": "sha256:345fc173043d90994c8ef24fefe11473f293e46f6b5c4e7026ef6f9acc0f488e",
+      "prev_hash": "sha256:03864d5aaec3061d0ca1c3250c1b4762d3298ccf13119fe4dd7ada8d74583c5f",
+      "seq": 7,
+      "subject": {
+        "quote_id": "qte_4FYQX7FVA9R3F5K39DBSKPKS63",
+        "sku": "HTL-DEMO-OVERCAP"
+      },
+      "trace_id": "trc_1E4FJRCPD33R97623HB146DFP2"
+    },
+    {
+      "action": "order.proposed",
+      "actor_id": "agt_demo_over_cap",
+      "actor_type": "agent",
+      "entry_hash": "sha256:a689f72cd95bf3cf3419899735b33b642b9be51607a1cfd27c77e7462b104741",
+      "payload": {
+        "mandate_id": "mdt_3HYBZNFQDSWTABFSZYXP1PN2K2",
+        "quote_id": "qte_4FYQX7FVA9R3F5K39DBSKPKS63",
+        "reason_codes": [
+          "UNIT_CAP_EXCEEDED"
+        ],
+        "verdict": "DENY"
+      },
+      "payload_hash": "sha256:ae4d09ccae2dc660725fba409647d6fd234beebcdcf56b8845b54df667c20f4d",
+      "prev_hash": "sha256:20f36f85caedf32def760b76cc7c6b0c82d821cd6c39d57b64780fe5480dcfb3",
+      "seq": 8,
+      "subject": {
+        "mandate_id": "mdt_3HYBZNFQDSWTABFSZYXP1PN2K2",
+        "quote_id": "qte_4FYQX7FVA9R3F5K39DBSKPKS63"
+      },
+      "trace_id": "trc_09BR9785MV8VQTMPXYAGWG85Y5"
+    }
+  ],
+  "mandate_id": "mdt_3HYBZNFQDSWTABFSZYXP1PN2K2",
+  "recovery_action": "none needed -- no reservation taken, no provider call made",
+  "reserved_balance_minor": 0,
+  "scenario": "over_cap",
+  "terminal_outcome": "DENY (rejected by the policy engine, before G4)",
+  "trace_id": "trc_09BR9785MV8VQTMPXYAGWG85Y5"
+}

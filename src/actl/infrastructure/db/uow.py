@@ -17,6 +17,7 @@ from actl.infrastructure.db.repositories.audit_log import AuditLogRepository
 from actl.infrastructure.db.repositories.catalog import CatalogRepository
 from actl.infrastructure.db.repositories.decisions import DecisionRepository
 from actl.infrastructure.db.repositories.idempotency_keys import IdempotencyKeyRepository
+from actl.infrastructure.db.repositories.integrity import IntegrityHaltRepository
 from actl.infrastructure.db.repositories.ledger_entries import LedgerEntryRepository
 from actl.infrastructure.db.repositories.mandates import MandateRepository
 from actl.infrastructure.db.repositories.orders import OrderRepository
@@ -42,6 +43,7 @@ class UnitOfWork:
     idempotency_keys: IdempotencyKeyRepository
     sagas: SagaRepository
     agent_identities: AgentIdentityRepository
+    integrity: IntegrityHaltRepository
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession] | None = None) -> None:
         self._session_factory = session_factory or get_session_factory()
@@ -66,6 +68,7 @@ class UnitOfWork:
         self.idempotency_keys = IdempotencyKeyRepository(session)
         self.sagas = SagaRepository(session)
         self.agent_identities = AgentIdentityRepository(session)
+        self.integrity = IntegrityHaltRepository(session)
         return self
 
     async def commit(self) -> None:
