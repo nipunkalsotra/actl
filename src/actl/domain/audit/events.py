@@ -27,3 +27,10 @@ class AuditAction(StrEnum):
     WEBHOOK_RECEIVED = "webhook.received"
     COMPENSATION_APPLIED = "compensation.applied"
     SETTLEMENT_CLOSED = "settlement.closed"
+
+    # §12.2 / §28 P6 — ledger reservation lifecycle events not already
+    # covered by BUDGET_RESERVED (which records the gate's G4 decision;
+    # these record the ledger's own state changes for a reservation).
+    RESERVATION_RELEASED = "reservation.released"
+    RESERVATION_EXPIRED = "reservation.expired"
+    MANDATE_EXECUTING = "mandate.executing"

@@ -22,6 +22,7 @@ from actl.infrastructure.db.repositories.orders import OrderRepository
 from actl.infrastructure.db.repositories.outbox import OutboxRepository
 from actl.infrastructure.db.repositories.payments import PaymentRepository
 from actl.infrastructure.db.repositories.quotes import QuoteRepository
+from actl.infrastructure.db.repositories.sagas import SagaRepository
 from actl.infrastructure.db.repositories.webhook_events import WebhookEventRepository
 
 
@@ -38,6 +39,7 @@ class UnitOfWork:
     outbox: OutboxRepository
     webhook_events: WebhookEventRepository
     idempotency_keys: IdempotencyKeyRepository
+    sagas: SagaRepository
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession] | None = None) -> None:
         self._session_factory = session_factory or get_session_factory()
@@ -60,6 +62,7 @@ class UnitOfWork:
         self.outbox = OutboxRepository(session)
         self.webhook_events = WebhookEventRepository(session)
         self.idempotency_keys = IdempotencyKeyRepository(session)
+        self.sagas = SagaRepository(session)
         return self
 
     async def commit(self) -> None:

@@ -223,6 +223,39 @@ class LedgerEntryRow(Base):
     )
 
 
+class SagaRow(Base):
+    __tablename__ = "sagas"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    mandate_id: Mapped[str] = mapped_column(ForeignKey("mandates.id"), nullable=False)
+    decision_id: Mapped[str] = mapped_column(ForeignKey("policy_decisions.id"), nullable=False)
+    quote_id: Mapped[str] = mapped_column(ForeignKey("quotes.id"), nullable=False)
+    order_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(CHAR(3), nullable=False)
+    step: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+
+    )
+
+    __table_args__ = (
+        CheckConstraint("amount_minor > 0", name="sagas_amount_minor_positive"),
+        CheckConstraint(
+            "status IN ('RUNNING','AWAITING_AUTHORIZATION','COMPLETED',"
+            "'COMPENSATING','COMPENSATED','FAILED')",
+            name="sagas_status_check",
+        ),
+    )
+
+
 class AuditLogRow(Base):
     __tablename__ = "audit_log"
 

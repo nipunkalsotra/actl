@@ -12,6 +12,7 @@ model by P1 design (ADR 0002 decision 3), so it's a separate parameter here.
 
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from actl.domain.mandate.models import Mandate
@@ -55,3 +56,17 @@ class MandateRepository:
         if row is None:
             raise KeyError(mandate_id)
         row.status = status.value
+
+    async def get_for_update(self, mandate_id: str) -> tuple[Mandate, MandateStatus] | None:
+        """§12.1: `SELECT ... FOR UPDATE` on the mandate row -- the
+        serialisation point that makes concurrent reservation attempts
+        against the same mandate impossible to over-admit (§28 P6 gate G4).
+        Row lock is released when the caller's transaction commits/rolls
+        back, never explicitly here."""
+        result = await self._session.execute(
+            select(MandateRow).where(MandateRow.id == mandate_id).with_for_update()
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return Mandate.model_validate(row.spec), MandateStatus(row.status)
