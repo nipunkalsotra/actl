@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/receipt_issue_request.schema.json",
+  "title": "actl.receipt_issue_request/v1",
+  "description": "§14 receipt.issue request body: order_id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id"],
+  "properties": {
+    "order_id": { "type": "string", "minLength": 1 }
+  }
+}

@@ -1,13 +1,15 @@
-"""Isolated Postgres via testcontainers, shared by every tests/integration/*
-subdirectory — a real Postgres 16 instance, real triggers, real constraints.
-Never substitute SQLite or a mock to make this easier; §18.1 is explicit
-that Postgres is the system of record and its guarantees (triggers, checks,
-FKs) are exactly what these tests exist to prove.
+"""Isolated Postgres and Redis via testcontainers, shared by every
+tests/integration/* subdirectory — a real Postgres 16 instance and a real
+Redis 7 instance, never a mock or an in-memory substitute. §18.1 is
+explicit that Postgres is the system of record and its guarantees
+(triggers, checks, FKs) are exactly what these tests exist to prove; §28
+P7's replay-protection tests need the exact same real-backend discipline
+for Redis's atomic `SET NX EX` (no fake can prove that atomicity).
 
-One container for the whole test session (spinning up Postgres per test, or
-per subdirectory, would dominate runtime); repeatability instead comes from
-every test using fresh ULID-based ids, so tests never collide on shared
-rows regardless of order.
+One container each for the whole test session (spinning either up per
+test, or per subdirectory, would dominate runtime); repeatability instead
+comes from every test using fresh ULID-based ids/msg_ids, so tests never
+collide on shared state regardless of order.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -27,6 +30,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from testcontainers.community.postgres import PostgresContainer
+from testcontainers.community.redis import RedisContainer
 
 # Docker Desktop's socket isn't shared with the Ryuk cleanup sidecar in this
 # environment; we stop the container explicitly via the context manager
@@ -69,3 +73,25 @@ async def engine(postgres_url: str) -> AsyncIterator[AsyncEngine]:
 @pytest.fixture(scope="session")
 def session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     return async_sessionmaker(engine, expire_on_commit=False)
+
+
+@pytest.fixture(scope="session")
+def redis_url() -> Iterator[str]:
+    with RedisContainer("redis:7-alpine") as container:
+        host = container.get_container_host_ip()
+        port = container.get_exposed_port(container.port)
+        yield f"redis://{host}:{port}/0"
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def redis_client(redis_url: str) -> AsyncIterator[Redis]:
+    # Function-scoped despite the session-scoped container: a fresh
+    # connection per test avoids any cross-test event-loop binding issue
+    # (the same reasoning as ADR 0005 decision 12 for TestClient's engine),
+    # and FLUSHDB keeps nonce keys from one test invisible to the next.
+    client = Redis.from_url(redis_url)
+    await client.flushdb()
+    try:
+        yield client
+    finally:
+        await client.aclose()

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/order_status_response.schema.json",
+  "title": "actl.order_status_response/v1",
+  "description": "§14 order.status response body: order state, payment state, audit sequence range.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id", "status", "amount_minor", "currency", "provider_payment_id",
+    "audit_seq_from", "audit_seq_to"
+  ],
+  "properties": {
+    "order_id": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "minLength": 1 },
+    "amount_minor": { "type": "integer", "exclusiveMinimum": 0 },
+    "currency": { "const": "INR" },
+    "provider_payment_id": { "type": ["string", "null"] },
+    "audit_seq_from": { "type": ["integer", "null"], "minimum": 1 },
+    "audit_seq_to": { "type": ["integer", "null"], "minimum": 1 }
+  }
+}

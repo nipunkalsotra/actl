@@ -85,6 +85,20 @@ async def _add_movements(
         )
 
 
+async def committed_total(uow: UnitOfWork, mandate_id: str) -> int:
+    """§28 P7: reserved + settled, combined -- the same total gate G4's own
+    `held + spent` check enforces atomically. Used by the merchant-agent's
+    order.propose handler to populate `PolicyContext.reserved_minor` for
+    the *advisory* policy-engine pre-check (§10) before the saga's later,
+    row-locked reservation makes the real, atomic decision -- so this is a
+    plain, non-locking read, not a second source of truth."""
+    reserved_entries = await uow.ledger_entries.list_for_account(account(mandate_id, "reserved"))
+    settled_entries = await uow.ledger_entries.list_for_account(account(mandate_id, "settled"))
+    held = net_balance([(e.direction, e.amount_minor) for e in reserved_entries])
+    spent = net_balance([(e.direction, e.amount_minor) for e in settled_entries])
+    return held + spent
+
+
 async def reserve(
     uow: UnitOfWork,
     clock: Clock,

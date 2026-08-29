@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/order_status_request.schema.json",
+  "title": "actl.order_status_request/v1",
+  "description": "§14 order.status request body: order_id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id"],
+  "properties": {
+    "order_id": { "type": "string", "minLength": 1 }
+  }
+}

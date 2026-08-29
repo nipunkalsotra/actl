@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/receipt_issue_response.schema.json",
+  "title": "actl.receipt_issue_response/v1",
+  "description": "§14 receipt.issue response body: payment_id, amount, audit_seq, chain segment.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id", "payment_id", "amount_minor", "currency", "audit_seq_from", "audit_seq_to"
+  ],
+  "properties": {
+    "order_id": { "type": "string", "minLength": 1 },
+    "payment_id": { "type": "string", "minLength": 1 },
+    "amount_minor": { "type": "integer", "exclusiveMinimum": 0 },
+    "currency": { "const": "INR" },
+    "audit_seq_from": { "type": "integer", "minimum": 1 },
+    "audit_seq_to": { "type": "integer", "minimum": 1 }
+  }
+}

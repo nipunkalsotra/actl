@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/catalog_query_request.schema.json",
+  "title": "actl.catalog_query_request/v1",
+  "description": "§14 catalog.query request body: structured filters only, never prose (§13.1). Response body reuses catalog.schema.json -- the same CatalogFeed shape GET /agent/v1/catalog returns.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "category": { "type": ["string", "null"] },
+    "location": { "type": ["string", "null"] },
+    "max_unit_minor": { "type": ["integer", "null"], "exclusiveMinimum": 0 },
+    "cursor": { "type": ["string", "null"] },
+    "limit": { "type": "integer", "exclusiveMinimum": 0, "maximum": 100 }
+  }
+}

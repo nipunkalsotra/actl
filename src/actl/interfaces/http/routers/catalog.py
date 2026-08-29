@@ -33,6 +33,11 @@ router = APIRouter()
 
 _CACHE_CONTROL = "max-age=30"
 
+# Postgres/asyncpg cannot represent a NUL byte in a text value at all
+# (`CharacterNotInRepertoireError`) -- these fields reach a SQL WHERE
+# clause via CatalogQuery, so reject one here rather than crash with a 500.
+_NO_NUL_BYTES = r"^[^\x00]*$"
+
 
 def _parse_location(location: str | None) -> tuple[str | None, str | None]:
     if location is None:
@@ -66,10 +71,10 @@ def _if_none_match_hits(header_value: str, etag: str) -> bool:
 @router.get("/agent/v1/catalog")
 async def get_catalog(
     request: Request,
-    category: Annotated[str | None, Query()] = None,
-    location: Annotated[str | None, Query()] = None,
+    category: Annotated[str | None, Query(pattern=_NO_NUL_BYTES)] = None,
+    location: Annotated[str | None, Query(pattern=_NO_NUL_BYTES)] = None,
     max_unit_minor: Annotated[int | None, Query(gt=0)] = None,
-    cursor: Annotated[str | None, Query()] = None,
+    cursor: Annotated[str | None, Query(pattern=_NO_NUL_BYTES)] = None,
     limit: Annotated[int, Query(gt=0, le=100)] = 20,
     uow: UnitOfWork = Depends(get_uow),
     clock: Clock = Depends(get_clock),
@@ -102,8 +107,8 @@ async def get_catalog(
 
 
 class QuoteRequest(BaseModel):
-    sku: str = Field(min_length=1)
-    mandate_id: str = Field(min_length=1)
+    sku: str = Field(min_length=1, pattern=_NO_NUL_BYTES)
+    mandate_id: str = Field(min_length=1, pattern=_NO_NUL_BYTES)
     nights: int = Field(gt=0)
 
 

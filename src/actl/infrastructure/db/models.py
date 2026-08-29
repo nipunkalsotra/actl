@@ -346,3 +346,30 @@ class IdempotencyKeyRow(Base):
             "state IN ('IN_FLIGHT','COMPLETED','FAILED')", name="idempotency_keys_state_check"
         ),
     )
+
+
+class AgentIdentityRow(Base):
+    __tablename__ = "agent_identities"
+
+    agent_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    key_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    alg: Mapped[str] = mapped_column(Text, nullable=False)
+    public_key_hex: Mapped[str | None] = mapped_column(Text, nullable=True)
+    hmac_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="ACTIVE")
+    not_before: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint("alg IN ('Ed25519','HMAC-SHA256')", name="agent_identities_alg_check"),
+        CheckConstraint("status IN ('ACTIVE','REVOKED')", name="agent_identities_status_check"),
+        CheckConstraint(
+            "(alg = 'Ed25519' AND public_key_hex IS NOT NULL)"
+            " OR (alg = 'HMAC-SHA256' AND hmac_secret IS NOT NULL)",
+            name="agent_identities_key_material_check",
+        ),
+    )

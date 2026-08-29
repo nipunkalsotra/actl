@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/order_propose_request.schema.json",
+  "title": "actl.order_propose_request/v1",
+  "description": "§8.4 / §14 order.propose request body. Carries only hashes and ids -- never a mandate body (§8.4 WHY THIS WAY: the merchant already holds the mandate; a compromised buyer-agent cannot smuggle in a modified copy with a wider cap).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["quote_id", "quote_hash", "mandate_id", "mandate_spec_hash", "intent_hash"],
+  "properties": {
+    "quote_id": { "type": "string", "minLength": 1 },
+    "quote_hash": { "type": "string", "minLength": 1 },
+    "mandate_id": { "type": "string", "minLength": 1 },
+    "mandate_spec_hash": { "type": "string", "minLength": 1 },
+    "intent_hash": { "type": "string", "minLength": 1 }
+  }
+}

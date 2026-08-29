@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/order_propose_response.schema.json",
+  "title": "actl.order_propose_response/v1",
+  "description": "§14 order.propose response body: order.accept or order.reject + reason code.",
+  "type": "object",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "required": ["decision", "order_id", "saga_id"],
+      "properties": {
+        "decision": { "const": "accept" },
+        "order_id": { "type": "string", "minLength": 1 },
+        "saga_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "required": ["decision", "reason_code", "trace_id"],
+      "properties": {
+        "decision": { "const": "reject" },
+        "reason_code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "trace_id": { "type": "string", "minLength": 1 }
+      }
+    }
+  ]
+}

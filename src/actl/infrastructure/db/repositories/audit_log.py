@@ -18,7 +18,7 @@ import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from actl.infrastructure.db.models import AuditLogRow
@@ -168,3 +168,18 @@ class AuditLogRepository:
     async def get_by_seq(self, seq: int) -> AuditLogRecord | None:
         row = await self._session.get(AuditLogRow, seq)
         return _to_record(row) if row is not None else None
+
+    async def get_seq_range_for_order(self, order_id: str) -> tuple[int, int] | None:
+        """§14 order.status / receipt.issue: "audit sequence range". Uses
+        the `subject->>'order_id'` expression index §18.2 names
+        (`ix_audit_log_subject_order_id`, already created by P2's own
+        0002_audit_outbox migration)."""
+        result = await self._session.execute(
+            select(func.min(AuditLogRow.seq), func.max(AuditLogRow.seq)).where(
+                AuditLogRow.subject["order_id"].astext == order_id
+            )
+        )
+        row = result.one()
+        if row[0] is None:
+            return None
+        return (row[0], row[1])
