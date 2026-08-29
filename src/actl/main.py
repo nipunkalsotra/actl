@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from actl.config import settings
 from actl.infrastructure.providers.factory import build_payment_provider
 from actl.interfaces.agent import routes as agent_routes
-from actl.interfaces.http.routers import admin, catalog, well_known
+from actl.interfaces.http.routers import admin, catalog, growth, well_known
 from actl.interfaces.webhooks import razorpay as razorpay_webhooks
 from actl.platform.breaker import CircuitBreaker
 from actl.platform.clock import SystemClock
@@ -54,6 +54,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Agentic Commerce Trust Layer", lifespan=lifespan)
 app.include_router(catalog.router)
 app.include_router(admin.router)
+app.include_router(growth.router)
 app.include_router(well_known.router)
 app.include_router(razorpay_webhooks.router)
 app.include_router(agent_routes.router)

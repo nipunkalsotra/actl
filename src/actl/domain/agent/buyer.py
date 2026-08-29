@@ -53,3 +53,24 @@ def rank(items: list[CatalogItem]) -> list[CatalogItem]:
 
 def filter_and_rank(items: list[CatalogItem], mandate: Mandate) -> list[CatalogItem]:
     return rank(filter_candidates(items, mandate))
+
+
+def apply_llm_ranking(
+    candidates: list[CatalogItem], ranked_skus: list[str]
+) -> list[CatalogItem] | None:
+    """§17.1 U2: "An ordering of the supplied SKUs... any SKU not in the
+    input list is a hard rejection of the whole response." `ranked_skus`
+    must be exactly a permutation of `candidates`' own skus -- no
+    additions, no omissions, no duplicates -- or this returns None and
+    the caller must fall back to `rank()`. On success, returns the *same*
+    CatalogItem objects the deterministic filter already produced,
+    reordered only; nothing about price, rating, or any other field can
+    be altered by this call, by construction."""
+    by_sku = {item.sku: item for item in candidates}
+    if len(ranked_skus) != len(candidates):
+        return None
+    if len(set(ranked_skus)) != len(ranked_skus):
+        return None
+    if not set(ranked_skus) <= by_sku.keys():
+        return None
+    return [by_sku[sku] for sku in ranked_skus]

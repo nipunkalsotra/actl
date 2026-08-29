@@ -109,3 +109,45 @@ class PaymentProvider(Protocol):
         body with the webhook secret, constant-time compared. Evidence,
         never sole truth."""
         ...
+
+
+# ---------------------------------------------------------------------------
+# §17 LLMClient port
+# ---------------------------------------------------------------------------
+
+
+class LLMUnavailable(ExternalServiceError):
+    """§17.2/§17.3: raised for *every* failure mode a caller must react to
+    by falling back to deterministic code -- timeout, network error, rate
+    limited, circuit open, LLM_ENABLED=false, or a response that still
+    isn't valid JSON after the schema-repair loop. Callers never
+    distinguish sub-reasons; the contract is identical either way. Never
+    raised for a syntactically-valid JSON object that fails the caller's
+    own Pydantic schema -- that is the caller's referential-validation
+    job, using the value this port did successfully return."""
+
+    reason_code = "LLM_UNAVAILABLE"
+
+
+class LLMClient(Protocol):
+    """§17. Three bounded uses (U1 extraction, U2 ranking, U3 narration)
+    share this one port -- two shapes cover all of them: JSON mode for the
+    two that must produce a schema-valid structure, plain text for
+    narration prose. Temperature 0 and the timeout/breaker/rate-limit/
+    cache machinery are all internal to the concrete adapter
+    (`infrastructure/llm/`); application code never sees any of that,
+    exactly mirroring how `PaymentProvider` hides Razorpay's own retry and
+    auth concerns from `application/gate.py`."""
+
+    async def complete_json(
+        self, *, system: str, user: str, max_tokens: int
+    ) -> dict[str, object]:
+        """Temperature 0, JSON object mode. Raises `LLMUnavailable` on any
+        failure. On success, returns *some* parsed JSON object -- schema
+        validity against a specific use case's contract is always the
+        caller's job."""
+        ...
+
+    async def complete_text(self, *, system: str, user: str, max_tokens: int) -> str:
+        """Temperature 0, plain text. Raises `LLMUnavailable` on failure."""
+        ...

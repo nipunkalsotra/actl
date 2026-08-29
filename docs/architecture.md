@@ -2887,7 +2887,13 @@ Razorpay AI Buildathon · Track 01 — AI Growth & Agentic Commerce             
 
   # ---- llm -------------------------------------------------------------------
   GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxx
-  GROQ_MODEL=llama-3.3-70b-versatile
+  # Provider-forced migration: Groq retired llama-3.3-70b-versatile (this
+  # document's original value) for free/developer-tier accounts on 2026-08-16
+  # (console.groq.com/docs/deprecations), before this build's P8 phase began.
+  # openai/gpt-oss-120b is Groq's own primary recommended replacement,
+  # confirmed to support JSON mode. Stays a config value, never hardcoded
+  # elsewhere -- see docs/adr/0009-p8-llm-decisions.md decision 1.
+  GROQ_MODEL=openai/gpt-oss-120b
   LLM_ENABLED=true
   LLM_TIMEOUT_S=12
   LLM_MAX_CALLS_PER_TXN=3
@@ -3526,7 +3532,9 @@ Razorpay AI Buildathon · Track 01 — AI Growth & Agentic Commerce             
 
 
   Read §17 and phase P8. Add the Groq layer WITHOUT changing any behaviour that already works.
-  1. LLMClient port + GroqClient (llama-3.3-70b-versatile, temperature 0, JSON mode,
+  1. LLMClient port + GroqClient (GROQ_MODEL -- openai/gpt-oss-120b; Groq retired this
+     prompt's original llama-3.3-70b-versatile for free-tier accounts on 2026-08-16,
+     see docs/adr/0009 decision 1 -- temperature 0, JSON mode,
      LLM_TIMEOUT_S, circuit breaker, Redis token bucket, semantic cache keyed by prompt sha256).
   2. U1 mandate extraction -> MandateDraft. Every monetary value must appear verbatim as a
      numeral in the user's text; if a bound is missing, ask a question — never infer a default.

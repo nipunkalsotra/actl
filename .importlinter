@@ -52,3 +52,19 @@ protected_modules =
 allowed_importers =
     actl.application.gate
     actl.infrastructure.providers.factory
+
+[importlinter:contract:5]
+# §28 P8 instruction 1: "no direct Groq imports outside infrastructure."
+# The domain half of this is already contract 1 (`groq` forbidden to
+# actl.domain); this covers the other two layers the whole import graph
+# can reach it from, mirroring contract 3's shape for the Razorpay
+# adapter -- application/interfaces code depends only on the `LLMClient`
+# port (application/ports.py), never on the groq SDK or the concrete
+# GroqClient directly.
+name = Only infrastructure may import groq
+type = forbidden
+source_modules =
+    actl.interfaces
+    actl.application
+forbidden_modules =
+    groq

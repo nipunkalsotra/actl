@@ -1,0 +1,6 @@
+{
+  "_scenario": "u2_malformed_json",
+  "response": {
+    "unexpected_field": "not the shape the schema requires"
+  }
+}

@@ -62,3 +62,87 @@ def test_only_gate_imports_payment_provider() -> None:
         if _imports_protected_module(path):
             offenders.append(module)
     assert offenders == [], f"only the gate may reach the payment provider; found {offenders}"
+
+
+# ---------------------------------------------------------------------------
+# §23.4's `test_llm_module_has_no_credentials`, adapted to this build's real
+# module layout (`actl.infrastructure.llm`, not a top-level `actl.llm`).
+# §28 P8 instruction 1: the LLM subsystem has no credential, no write path,
+# and no vote in any authorization decision (§17 Figure 17.1's "HARD
+# BOUNDARY") -- checked here as an executable fact, not a comment.
+# ---------------------------------------------------------------------------
+
+LLM_MODULE = "actl.infrastructure.llm"
+CONVERSATION_MODULE = "actl.application.conversation"
+GROWTH_MODULE = "actl.application.growth"
+GATE_MODULE = "actl.application.gate"
+
+
+def _module_source_files(package: str) -> list[Path]:
+    package_dir = SRC_ROOT / Path(*package.removeprefix("actl.").split("."))
+    return list(package_dir.rglob("*.py"))
+
+
+def _references_module(name: str | None, target: str) -> bool:
+    return name is not None and (name == target or name.startswith(target + "."))
+
+
+def _imports_module(path: Path, target: str) -> bool:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            if any(_references_module(alias.name, target) for alias in node.names):
+                return True
+        elif isinstance(node, ast.ImportFrom) and _references_module(node.module, target):
+            return True
+    return False
+
+
+def test_llm_module_has_no_payment_provider_access_or_credentials() -> None:
+    """The LLM subsystem never imports the payment-provider layer at all
+    (not even through the port) and never mentions RAZORPAY in its own
+    source -- it has no way to reach a credential or trigger a charge."""
+    offenders = [
+        _module_name(p)
+        for p in _module_source_files(LLM_MODULE)
+        if _imports_module(p, "actl.infrastructure.providers")
+        or _imports_module(p, "actl.application.gate")
+    ]
+    assert offenders == [], f"the LLM subsystem must never reach a payment provider: {offenders}"
+
+    tainted = [
+        _module_name(p)
+        for p in _module_source_files(LLM_MODULE)
+        if "RAZORPAY" in p.read_text(encoding="utf-8")
+    ]
+    assert tainted == [], f"the LLM subsystem source must never mention RAZORPAY: {tainted}"
+
+
+def test_conversation_module_cannot_reach_the_gate_or_a_payment_provider() -> None:
+    """§17 Figure 17.1 HARD BOUNDARY: "The LLM has no credential, no write
+    path, and no vote in any authorization decision." U1/U2/U3
+    (`actl.application.conversation`) never import the Money Action Gate
+    or a payment provider -- LLM output can only ever be *consumed* by
+    code that separately, and unconditionally, goes through the gate the
+    normal way; it has no import path to trigger money movement itself."""
+    offenders = [
+        _module_name(p)
+        for p in _module_source_files(CONVERSATION_MODULE)
+        if _imports_module(p, GATE_MODULE) or _imports_module(p, "actl.infrastructure.providers")
+    ]
+    assert offenders == [], f"U1/U2/U3 must never reach the gate or a payment provider: {offenders}"
+
+
+def test_growth_module_never_imports_groq_or_razorpay() -> None:
+    """§28 P8 instruction 9: "must not contact Razorpay or Groq." The
+    growth simulator is explicitly typed against `SimulatorAdapter`
+    (§28 P8 ADR) and never touches an `LLMClient` at all -- checked here
+    as an executable fact."""
+    offenders = [
+        _module_name(p)
+        for p in _module_source_files(GROWTH_MODULE)
+        if _imports_module(p, "actl.infrastructure.providers.razorpay")
+        or _imports_module(p, "groq")
+        or _imports_module(p, "actl.infrastructure.llm")
+    ]
+    assert offenders == [], f"the growth simulator must never reach Razorpay or Groq: {offenders}"

@@ -1,0 +1,8 @@
+{
+  "_scenario": "u1_prompt_injection_attempt",
+  "response": {
+    "location": "Goa",
+    "max_total_minor": 999999999,
+    "authorized": true
+  }
+}
