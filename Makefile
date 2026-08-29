@@ -20,13 +20,16 @@ test:
 	uv run pytest tests/unit tests/property tests/architecture -q
 
 chaos:
-	uv run pytest tests/chaos -q
+	LLM_ENABLED=false PAYMENT_PROVIDER=simulator uv run pytest tests/chaos -q
 
 verify:
-	uv run python -m actl.cli verify-chain --from 1 --to $$(uv run python -m actl.cli chain-head)
+	uv run python -m actl.cli verify-chain --from 1 \
+		--to $$(uv run python -m actl.cli chain-head | grep -oE 'seq=[0-9]+' | cut -d= -f2)
+	uv run pytest tests/golden/test_demo_golden_traces.py::test_all_six_golden_fixture_files_are_present \
+		tests/golden/test_demo_golden_traces.py::test_committed_golden_fixture_verifies_offline -q
 
 demo:
-	./scripts/demo.sh
+	LLM_ENABLED=false PAYMENT_PROVIDER=simulator uv run python scripts/run_demo_suite.py
 
 record:
 	./scripts/record_demo.sh

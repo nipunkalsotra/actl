@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from actl.application.audit_service import append_entry
+from actl.application.integrity import raise_if_halted
 from actl.domain.audit.events import AuditAction
 from actl.domain.ledger.model import (
     LedgerMovement,
@@ -219,7 +220,14 @@ async def sweep(uow: UnitOfWork, clock: Clock, *, reservation_ttl_s: int) -> lis
     shrunk budget. Returns the swept ref_ids. Idempotent/restart-safe: a
     reservation already captured/released/expired by the time this scans
     it (or by the time it re-checks under the row lock) is silently
-    skipped, never double-released."""
+    skipped, never double-released.
+
+    §20 F10 / §28 P9 instruction 2: refuses to run at all while the
+    durable integrity halt is tripped -- a "scheduled/sweep entry point"
+    is money-affecting work exactly like any other, so it raises
+    `IntegrityHalted` rather than silently releasing reservations while
+    the audit trail that would record the release is untrusted."""
+    await raise_if_halted(uow)
     cutoff = clock.now() - timedelta(seconds=reservation_ttl_s)
     swept: list[str] = []
     for ref_id in await uow.ledger_entries.list_reservations_older_than(cutoff):

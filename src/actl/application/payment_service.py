@@ -26,6 +26,7 @@ from typing import Literal, cast
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from actl.application.audit_service import append_entry
+from actl.application.integrity import raise_if_halted
 from actl.application.ports import (
     PaymentProvider,
     ProviderPayment,
@@ -426,7 +427,13 @@ async def process_unprocessed_webhooks(
     event. Re-running this over an already-processed event is a no-op
     twice over — `list_unprocessed` never returns it again, and even if it
     did, the terminal-status check inside `_apply_webhook_event` would
-    refuse to re-apply it."""
+    refuse to re-apply it.
+
+    §20 F10 / §28 P9 instruction 2: this is one of the worker's two
+    money-affecting entry points -- refuses to apply any webhook (a
+    capture/decline transition, real ledger movement) while the durable
+    integrity halt is tripped."""
+    await raise_if_halted(uow)
     processed_ids: list[str] = []
     for event in await uow.webhook_events.list_unprocessed():
         await _apply_webhook_event(uow, clock, event, actor_id=actor_id)
@@ -511,6 +518,10 @@ async def reconcile_non_terminal_orders(
     reconcile_after_s: int | None = None,
     actor_id: str = "reconciler",
 ) -> list[ReconciliationOutcome]:
+    """§20 F10 / §28 P9 instruction 2: the worker's other money-affecting
+    entry point -- refuses to settle any order from a provider poll while
+    the durable integrity halt is tripped."""
+    await raise_if_halted(uow)
     cutoff = clock.now() - timedelta(seconds=reconcile_after_s or settings.reconcile_after_s)
     outcomes: list[ReconciliationOutcome] = []
     for order in await uow.orders.list_non_terminal_older_than(cutoff):

@@ -90,8 +90,26 @@ async def execute_money_action(
     every path — malformed input, a mandate/decision/policy/budget/
     freshness/idempotency denial, a provider failure, or an unexpected
     internal error all become a safe typed result; nothing raises out of
-    this function."""
+    this function.
+
+    §20 F10: checked before every other gate, including the malformed-
+    request check -- a tripped integrity halt (durable, cross-process
+    state in `integrity_halt`, §28 P9 production-readiness correction;
+    see docs/adr/0010 decision 16) refuses every money action, on every
+    process reading the same database, before any G1-G7 work begins.
+    Fails closed: unable to even reach the database to check is a denial
+    too (`INTERNAL_ERROR`, matching `test_gate_never_raises_on_unexpected_
+    internal_failure`'s own established expectation for infrastructure
+    failure) -- never an uncaught exception, matching this function's own
+    "nothing raises" contract."""
     trace = req.trace_id
+    try:
+        async with UnitOfWork(session_factory) as uow:
+            halt_state = await uow.integrity.get_state()
+    except Exception:
+        return _deny(ReasonCode.INTERNAL_ERROR, trace)
+    if halt_state.halted:
+        return _deny(ReasonCode.AUDIT_UNAVAILABLE, trace)
     if req.amount_minor <= 0 or not req.mandate_id or not req.decision_id or not req.quote_id:
         return _deny(ReasonCode.MALFORMED_REQUEST, trace)
 

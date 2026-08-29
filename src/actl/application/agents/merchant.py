@@ -194,7 +194,19 @@ async def handle_order_propose(
             refundable=quote.refundable,
             quoted_total_minor=quote.total_minor,
             current_total_minor=item.unit_price_minor * quote.nights,
-            catalog_version=live_catalog_version,
+            # The intent is hashed and bound against the terms this quote
+            # actually pinned (§10.1 rule 11 / Gate G5's whole point), not
+            # the live counter -- a legitimate buyer only ever knows their
+            # own quote's own catalog_version, never a value the merchant
+            # computes after the fact. Using `live_catalog_version` here
+            # instead (as this line once did) made `domain.policy.rules.
+            # catalog_freshness` compare `live_catalog_version` against
+            # itself -- vacuously true, permanently defeating Gate G5's
+            # own STALE_PRICE detection -- and independently caused every
+            # genuinely stale propose to fail intent_hash verification
+            # first (INTENT_MISMATCH), before the policy engine or the
+            # gate ever ran at all. See docs/adr/0010 decision 15.
+            catalog_version=quote.catalog_version,
             mandate_spec_hash=mandate.spec_hash or "",
             intent_hash="",
         )

@@ -14,10 +14,13 @@ import json
 import sys
 from pathlib import Path
 
-from actl.application.audit_service import ChainVerificationResult, verify_chain
+from actl.application import ledger_service
+from actl.application.audit_service import ChainVerificationResult, verify_chain_and_halt_on_failure
+from actl.application.demo import SCENARIOS, DemoResult, UnknownScenario, run_scenario
 from actl.application.growth.events import ARM_UPSELL
 from actl.application.growth.metrics import ArmMetrics, GrowthMetrics, compute_growth_metrics
 from actl.application.growth.simulation import SessionOutcome, run_growth_simulation
+from actl.application.integrity import IntegrityHalted
 from actl.application.payment_service import WebhookReceipt, process_webhook_delivery
 from actl.application.ports import ProviderOrder
 from actl.config import settings
@@ -72,9 +75,16 @@ def _chain_head() -> int:
 
 
 def _verify_chain(from_seq: int, to_seq: int) -> int:
+    """§20 F10: this is the "Verifier" -- a failure here durably trips the
+    cross-process integrity halt (`integrity_halt`, docs/adr/0010 decision
+    2), refusing every subsequent money action on every process reading
+    this database, via the gate's own first check."""
+
     async def _run() -> ChainVerificationResult:
         async with UnitOfWork() as uow:
-            return await verify_chain(uow, from_seq, to_seq)
+            result = await verify_chain_and_halt_on_failure(uow, from_seq, to_seq, SystemClock())
+            await uow.commit()
+            return result
 
     result = asyncio.run(_run())
 
@@ -216,6 +226,79 @@ def _growth(seed: str, sessions: int) -> int:
     return 0
 
 
+def _sweep(ttl_s: int) -> int:
+    """§12.2 / §20 F8: force-releases HELD reservations older than `ttl_s`
+    -- the operator-triggered recovery step docs/runbook.md's F8 section
+    names. Not wired into `actl.worker`'s own background loops (§28 P8
+    exit criteria only requires the webhook and reconciliation pollers
+    there); this thin CLI wrapper around the existing, already-tested
+    `application.ledger_service.sweep` is the operational surface for it.
+    Refuses to run at all while the durable §20 F10 integrity halt is
+    tripped (`ledger_service.sweep`'s own `raise_if_halted` check) --
+    "scheduled/sweep entry points must ... refuse money-affecting work
+    while the halt is active" (§28 P9 instruction 2)."""
+
+    async def _run() -> list[str]:
+        async with UnitOfWork() as uow:
+            swept = await ledger_service.sweep(uow, SystemClock(), reservation_ttl_s=ttl_s)
+            await uow.commit()
+        return swept
+
+    try:
+        swept = asyncio.run(_run())
+    except IntegrityHalted as exc:
+        print(f"REFUSED: integrity halt active ({exc.reason}) -- see docs/runbook.md F10")
+        return 1
+    if not swept:
+        print(f"no HELD reservations older than {ttl_s}s")
+        return 0
+    print(f"swept {len(swept)} reservation(s) older than {ttl_s}s:")
+    for ref_id in swept:
+        print(f"  {ref_id}")
+    return 0
+
+
+def _print_demo_result(result: DemoResult) -> None:
+    print(f"scenario: {result.scenario}")
+    print(f"detected fault: {result.detected_fault or 'none'}")
+    print(f"terminal outcome: {result.terminal_outcome}")
+    print(f"recovery/compensation: {result.recovery_action}")
+    print(f"reserved balance: {result.reserved_balance_minor}")
+    if result.chain is None:
+        print("audit chain: no entries written under this trace_id")
+    elif result.chain.ok:
+        seq_from, seq_to = result.seq_range or (0, 0)
+        print(
+            f"audit chain: VALID  seq {seq_from}..{seq_to}  "
+            f"head={result.chain.head_entry_hash}"
+        )
+    else:
+        b = result.chain.break_
+        assert b is not None
+        print(f"audit chain: BROKEN at seq={b.seq}  reason={b.reason}")
+    print(f"trace: {result.trace_id}  mandate: {result.mandate_id}")
+
+
+def _demo(scenario: str) -> int:
+    """§20.1 the four-minute demo script -- `actl demo --scenario <name>`.
+    Never calls Razorpay or Groq (`application.demo` uses SimulatorAdapter
+    and NullLLMClient only). argparse's own `choices=SCENARIOS` already
+    rejects an invalid name with a useful listing before this runs;
+    `UnknownScenario` is `run_scenario`'s own defense-in-depth guard."""
+
+    async def _run() -> DemoResult:
+        session_factory = get_session_factory()
+        return await run_scenario(scenario, session_factory)
+
+    try:
+        result = asyncio.run(_run())
+    except UnknownScenario as exc:
+        print(str(exc))
+        return 1
+    _print_demo_result(result)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="actl")
     parser.add_argument("--version", action="version", version="actl 0.1.0")
@@ -251,6 +334,16 @@ def build_parser() -> argparse.ArgumentParser:
     growth_parser.add_argument("--seed", type=str, required=True)
     growth_parser.add_argument("--sessions", type=int, required=True)
 
+    demo_parser = subparsers.add_parser(
+        "demo", help="run one of the six §20.1 demo scenarios (§28 P9)"
+    )
+    demo_parser.add_argument("--scenario", type=str, required=True, choices=SCENARIOS)
+
+    sweep_parser = subparsers.add_parser(
+        "sweep", help="force-release HELD reservations older than --ttl-s (§12.2, §20 F8)"
+    )
+    sweep_parser.add_argument("--ttl-s", type=int, default=settings.reservation_ttl_s)
+
     return parser
 
 
@@ -269,6 +362,10 @@ def main() -> None:
         sys.exit(_replay_webhook(args.fixture_path))
     if args.command == "growth":
         sys.exit(_growth(args.seed, args.sessions))
+    if args.command == "demo":
+        sys.exit(_demo(args.scenario))
+    if args.command == "sweep":
+        sys.exit(_sweep(args.ttl_s))
     parser.print_help()
 
 
