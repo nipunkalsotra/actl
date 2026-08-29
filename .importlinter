@@ -35,3 +35,20 @@ source_modules =
     actl.application.conversation
 forbidden_modules =
     actl.infrastructure.providers.razorpay
+
+[importlinter:contract:4]
+# §23.4 / §28 P6: the precise, native form of "only the gate may import the
+# concrete Razorpay adapter" -- a `protected` contract checks the whole
+# graph, not just an enumerated source-module list, so a *new* application
+# module added later that imports the adapter breaks the build immediately
+# rather than silently falling outside contract 3's list. The provider
+# factory (infrastructure's own composition root, invoked only from
+# actl.main/actl.cli/actl.worker -- see docs/adr/0006 decision 1 and
+# docs/adr/0007) is the one legitimate non-application importer.
+name = Only the gate (or the provider factory) may import the Razorpay adapter
+type = protected
+protected_modules =
+    actl.infrastructure.providers.razorpay
+allowed_importers =
+    actl.application.gate
+    actl.infrastructure.providers.factory

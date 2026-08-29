@@ -4,6 +4,7 @@ tests/integration/conftest.py, shared with tests/integration/audit."""
 
 from __future__ import annotations
 
+from actl.config import settings
 from actl.domain.mandate.hashing import compute_spec_hash
 from actl.domain.mandate.models import (
     Delegate,
@@ -17,8 +18,6 @@ from actl.domain.mandate.models import (
 )
 from actl.domain.mandate.signing import sign_spec_hash
 from actl.platform.ids import new_id
-
-_TEST_SIGNING_KEY = b"integration-test-signing-key"
 
 
 def make_locked_mandate() -> Mandate:
@@ -51,6 +50,8 @@ def make_locked_mandate() -> Mandate:
     )
     spec_hash = compute_spec_hash(draft)
     signature = MandateSignature(
-        alg="HMAC-SHA256", key_id="mk_1", value=sign_spec_hash(spec_hash, _TEST_SIGNING_KEY)
+        alg="HMAC-SHA256",
+        key_id="mk_1",
+        value=sign_spec_hash(spec_hash, settings.mandate_signing_key.encode("utf-8")),
     )
     return draft.model_copy(update={"spec_hash": spec_hash, "signature": signature})

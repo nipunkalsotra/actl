@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     quote_signing_key: str = "demo-quote-signing-key-change-me"
     admin_token: str = "demo-admin-token-change-me"
 
+    # ---- money action gate (§11, §28 P6) ---------------------------------
+    # HMAC key the gate's G1 re-verifies mandate.signature against — same
+    # symmetric-secret-in-test-mode spirit as quote_signing_key above; a
+    # real Ed25519 keypair-per-agent registry arrives with P7.
+    mandate_signing_key: str = "demo-mandate-signing-key-change-me"
+
 
 def _enforce_test_mode(s: Settings) -> None:
     """§21.4 — fail closed, loudly. Runs at import time, before any router is
