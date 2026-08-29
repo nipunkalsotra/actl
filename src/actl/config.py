@@ -9,6 +9,8 @@ harmless test-mode placeholder, never a real credential.
 
 from __future__ import annotations
 
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -70,6 +72,28 @@ class Settings(BaseSettings):
     # real Ed25519 keypair-per-agent registry arrives with P7.
     mandate_signing_key: str = "demo-mandate-signing-key-change-me"
 
+    # ---- agent-to-agent protocol (§14, §28 P7) ---------------------------
+    # The merchant-agent's own Ed25519 identity, used to sign every response
+    # envelope this process sends. A generated, harmless test-mode keypair —
+    # same placeholder spirit as every other secret above; the private key
+    # lives only here (an env-var-backed setting), never in agent_identities
+    # or any other persisted table (§28 P7 instruction 2).
+    merchant_agent_id: str = "agt_merchant_01"
+    merchant_key_id: str = "ed25519:merchant-demo"
+    merchant_private_key_hex: str = (
+        "3d0881a8072b0d907fe5e29ca3b01932c9114613d64d06613c8ce6a0e3f49871"
+    )
+
+    # §14.1 documents HMAC-SHA256 as an envelope-signing "development
+    # fallback" — but accepting it in any normal runtime would mean a
+    # weaker signature scheme is honoured wherever Ed25519 is required.
+    # Ed25519 is the only algorithm `application.agents.envelope_service.
+    # verify_envelope` accepts unless this is explicitly true, and
+    # `_enforce_no_hmac_outside_pytest` below refuses to even start the
+    # process if it is ever true outside a pytest run — so no real .env
+    # or production config can turn it on.
+    agent_envelope_hmac_test_only: bool = False
+
 
 def _enforce_test_mode(s: Settings) -> None:
     """§21.4 — fail closed, loudly. Runs at import time, before any router is
@@ -82,5 +106,20 @@ def _enforce_test_mode(s: Settings) -> None:
         )
 
 
+def _enforce_no_hmac_outside_pytest(s: Settings) -> None:
+    """`agent_envelope_hmac_test_only` must never be true outside a pytest
+    run. PYTEST_VERSION is set by pytest itself in os.environ for the
+    whole session (pytest >= 7.2), never by application config — so this
+    check cannot be satisfied by any real .env/development/production
+    settings file, only by actually running under pytest."""
+    if s.agent_envelope_hmac_test_only and "PYTEST_VERSION" not in os.environ:
+        raise SystemExit(
+            "FATAL: agent_envelope_hmac_test_only is enabled outside a pytest run. "
+            "The HMAC-SHA256 agent-envelope signing fallback is test-only and must "
+            "never be enabled in development or production."
+        )
+
+
 settings = Settings()
 _enforce_test_mode(settings)
+_enforce_no_hmac_outside_pytest(settings)

@@ -11,6 +11,7 @@ from types import TracebackType
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from actl.infrastructure.db.engine import get_session_factory
+from actl.infrastructure.db.repositories.agent_identities import AgentIdentityRepository
 from actl.infrastructure.db.repositories.audit_checkpoints import AuditCheckpointRepository
 from actl.infrastructure.db.repositories.audit_log import AuditLogRepository
 from actl.infrastructure.db.repositories.catalog import CatalogRepository
@@ -40,6 +41,7 @@ class UnitOfWork:
     webhook_events: WebhookEventRepository
     idempotency_keys: IdempotencyKeyRepository
     sagas: SagaRepository
+    agent_identities: AgentIdentityRepository
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession] | None = None) -> None:
         self._session_factory = session_factory or get_session_factory()
@@ -63,6 +65,7 @@ class UnitOfWork:
         self.webhook_events = WebhookEventRepository(session)
         self.idempotency_keys = IdempotencyKeyRepository(session)
         self.sagas = SagaRepository(session)
+        self.agent_identities = AgentIdentityRepository(session)
         return self
 
     async def commit(self) -> None:

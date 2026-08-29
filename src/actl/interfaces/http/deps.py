@@ -15,9 +15,14 @@ from collections.abc import AsyncIterator
 from typing import cast
 
 from fastapi import Request
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from actl.application.ports import PaymentProvider
+from actl.infrastructure.cache.nonce import NonceCache
+from actl.infrastructure.db.engine import get_session_factory as _get_session_factory
 from actl.infrastructure.db.uow import UnitOfWork
+from actl.platform.breaker import CircuitBreaker
 from actl.platform.clock import Clock, SystemClock
 
 _clock: Clock = SystemClock()
@@ -34,3 +39,19 @@ def get_clock() -> Clock:
 
 def get_payment_provider(request: Request) -> PaymentProvider:
     return cast(PaymentProvider, request.app.state.payment_provider)
+
+
+def get_redis(request: Request) -> Redis:
+    return cast(Redis, request.app.state.redis_client)
+
+
+def get_nonce_cache(request: Request) -> NonceCache:
+    return NonceCache(get_redis(request))
+
+
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    return _get_session_factory()
+
+
+def get_breaker(request: Request) -> CircuitBreaker:
+    return cast(CircuitBreaker, request.app.state.breaker)

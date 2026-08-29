@@ -15,8 +15,11 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from actl.config import settings
 from actl.infrastructure.providers.factory import build_payment_provider
+from actl.interfaces.agent import routes as agent_routes
 from actl.interfaces.http.routers import admin, catalog, well_known
 from actl.interfaces.webhooks import razorpay as razorpay_webhooks
+from actl.platform.breaker import CircuitBreaker
+from actl.platform.clock import SystemClock
 from actl.platform.logging import configure_logging, get_logger
 
 configure_logging(level=settings.log_level, json_format=settings.log_format == "json")
@@ -32,6 +35,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # a concrete payment provider) and handed to routers via
     # request.app.state, same as the engine and redis client above.
     app.state.payment_provider = build_payment_provider(settings)
+    # §28 P7: one breaker per process, reused across requests (matching
+    # worker.py's own breaker lifetime) -- its consecutive-failure state
+    # is meaningless if rebuilt fresh on every call.
+    app.state.breaker = CircuitBreaker(name="razorpay", clock=SystemClock())
     logger.info("app.startup", app_env=settings.app_env)
     try:
         yield
@@ -49,6 +56,7 @@ app.include_router(catalog.router)
 app.include_router(admin.router)
 app.include_router(well_known.router)
 app.include_router(razorpay_webhooks.router)
+app.include_router(agent_routes.router)
 
 
 @app.get("/healthz")

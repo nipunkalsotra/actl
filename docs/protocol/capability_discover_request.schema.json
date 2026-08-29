@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/capability_discover_request.schema.json",
+  "title": "actl.capability_discover_request/v1",
+  "description": "§14 capability.discover request body: \"Protocol versions supported\". Response body reuses agent-commerce.schema.json (§13.1) -- capability.discover echoes the same document GET /.well-known/agent-commerce.json advertises.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["supported_protocols"],
+  "properties": {
+    "supported_protocols": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    }
+  }
+}

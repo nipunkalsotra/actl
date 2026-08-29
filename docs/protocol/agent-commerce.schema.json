@@ -12,10 +12,11 @@
     "endpoints": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["catalog", "quote"],
+      "required": ["catalog", "quote", "messages"],
       "properties": {
         "catalog": { "type": "string", "minLength": 1 },
-        "quote": { "type": "string", "minLength": 1 }
+        "quote": { "type": "string", "minLength": 1 },
+        "messages": { "type": "string", "minLength": 1 }
       }
     },
     "signing": {

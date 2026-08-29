@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actl.example/protocol/agent-envelope.schema.json",
+  "title": "actl.acp/1 AgentEnvelope",
+  "description": "§8.4 / §14 AgentEnvelope -- every agent-to-agent protocol message, signed. Wraps a type-specific body under POST /agent/v1/messages.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "msg_id", "ts", "from", "to", "corr_id", "type", "body", "sig"],
+  "properties": {
+    "protocol": { "type": "string", "const": "actl.acp/1" },
+    "msg_id": { "type": "string", "minLength": 1 },
+    "ts": { "type": "string", "format": "date-time" },
+    "from": { "type": "string", "minLength": 1 },
+    "to": { "type": "string", "minLength": 1 },
+    "corr_id": { "type": "string", "minLength": 1 },
+    "type": {
+      "type": "string",
+      "enum": [
+        "capability.discover",
+        "catalog.query",
+        "quote.request",
+        "order.propose",
+        "order.status",
+        "receipt.issue",
+        "error"
+      ]
+    },
+    "body": { "type": "object" },
+    "sig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alg", "key_id", "value"],
+      "properties": {
+        "alg": { "type": "string", "enum": ["Ed25519", "HMAC-SHA256"] },
+        "key_id": { "type": "string", "minLength": 1 },
+        "value": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
