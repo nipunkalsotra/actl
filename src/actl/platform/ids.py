@@ -16,6 +16,14 @@ Only `actl demo`/golden-trace generation and their own tests ever call it;
 normal application code (the HTTP app, the worker, real `actl` money
 commands) never does, so this can never activate outside an explicit,
 intentional demo/test run.
+
+§28 P10 / §22: a ULID's own payload is exactly 128 bits (48-bit timestamp
++ 80-bit randomness) -- the same width as an OpenTelemetry `TraceId`.
+`encode_crockford`/`crockford_decode` are exact inverses of each other,
+so `platform.tracing` can losslessly round-trip a `trc_`-prefixed
+`trace_id` string to and from a native 128-bit OTel trace id: not two
+merely-correlated identifiers, the literal same 128-bit value in two
+encodings.
 """
 
 from __future__ import annotations
@@ -33,12 +41,20 @@ _deterministic_seed: str | None = None
 _deterministic_counter: int = 0
 
 
-def _encode_crockford(value: int, length: int) -> str:
+def encode_crockford(value: int, length: int) -> str:
     chars = [""] * length
     for i in range(length - 1, -1, -1):
         chars[i] = _CROCKFORD_ALPHABET[value & 0x1F]
         value >>= 5
     return "".join(chars)
+
+
+def crockford_decode(s: str) -> int:
+    """The exact inverse of `encode_crockford`."""
+    value = 0
+    for ch in s:
+        value = (value << 5) | _CROCKFORD_ALPHABET.index(ch)
+    return value
 
 
 def seed_deterministic_ids(seed: str) -> None:
@@ -68,12 +84,12 @@ def ulid() -> str:
         _deterministic_counter += 1
         digest = hashlib.sha256(f"{_deterministic_seed}:{_deterministic_counter}".encode()).digest()
         value = int.from_bytes(digest[: _ID_BITS // 8 + 1], "big") & ((1 << _ID_BITS) - 1)
-        return _encode_crockford(value, _ULID_LENGTH)
+        return encode_crockford(value, _ULID_LENGTH)
 
     timestamp_ms = time.time_ns() // 1_000_000
     randomness = int.from_bytes(os.urandom(_RANDOM_BITS // 8), "big")
     value = (timestamp_ms << _RANDOM_BITS) | randomness
-    return _encode_crockford(value, _ULID_LENGTH)
+    return encode_crockford(value, _ULID_LENGTH)
 
 
 def new_id(prefix: str) -> str:

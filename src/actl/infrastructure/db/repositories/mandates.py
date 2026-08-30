@@ -12,6 +12,8 @@ model by P1 design (ADR 0002 decision 3), so it's a separate parameter here.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,6 +52,16 @@ class MandateRepository:
         if row is None:
             return None
         return Mandate.model_validate(row.spec), MandateStatus(row.status)
+
+    async def get_created_at(self, mandate_id: str) -> datetime | None:
+        """§28 P10 explain endpoint: the "mandate.locked" timeline fact's
+        timestamp. `locked_at` exists as a column but no write path in this
+        build ever sets it (mandate issuance is the buyer-agent's own
+        system, out of this merchant-side build's scope) -- `created_at`
+        (this merchant's own ingestion time, always populated) is the
+        honest, always-available proxy."""
+        row = await self._session.get(MandateRow, mandate_id)
+        return row.created_at if row is not None else None
 
     async def update_status(self, mandate_id: str, status: MandateStatus) -> None:
         row = await self._session.get(MandateRow, mandate_id)

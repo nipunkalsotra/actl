@@ -42,6 +42,7 @@ from actl.infrastructure.db.repositories.orders import (
 )
 from actl.infrastructure.db.repositories.webhook_events import WebhookEventRecord
 from actl.infrastructure.db.uow import UnitOfWork
+from actl.platform import metrics, tracing
 from actl.platform.breaker import CircuitBreaker
 from actl.platform.clock import Clock
 from actl.platform.errors import ActlError, CircuitOpenError
@@ -122,12 +123,21 @@ async def create_provider_order(
     attempt_no: int,
     intent_hash: str,
     actor_id: str = "system",
+    trace_id: str | None = None,
     sleep: _SleepFn = asyncio.sleep,
 ) -> tuple[OrderRecord, bool]:
     """Returns (order, was_duplicate). `was_duplicate` is True whenever
     this call did not itself create a new provider order — a genuine
     replay of a completed attempt, or a call that had to wait for a
-    concurrent winner — matching §15.2's DUPLICATE_SUPPRESSED flag."""
+    concurrent winner — matching §15.2's DUPLICATE_SUPPRESSED flag.
+
+    `trace_id` -- §7 step 13's own pseudocode: `trace = req.trace_id`
+    flows through to the `payment.intent` audit append, so the money
+    action's OpenTelemetry trace id and its audit trace_id stay the exact
+    same value all the way to the provider call, not just up to G5.
+    Defaults to a fresh id for this function's own direct callers/tests
+    that have no request-level trace_id to thread through."""
+    trace = trace_id or new_id("trc")
     key = compute_idempotency_key(mandate_id, intent_hash, attempt_no)
     request_hash = hashlib.sha256(
         f"{order_id}|{mandate_id}|{amount_minor}|{currency}".encode()
@@ -181,7 +191,7 @@ async def create_provider_order(
         await uow.orders.add(order)
         await append_entry(
             uow,
-            trace_id=new_id("trc"),
+            trace_id=trace,
             actor_type="system",
             actor_id=actor_id,
             action=AuditAction.PAYMENT_INTENT,
@@ -201,15 +211,16 @@ async def create_provider_order(
 
     # ---- the single external call, outside any open transaction --------
     try:
-        provider_order = await _call_with_retry(
-            breaker,
-            lambda: provider.create_order(
-                amount_minor,
-                currency,
-                key,
-                notes={"order_id": order_id, "mandate_id": mandate_id},
-            ),
-        )
+        with tracing.span("provider.create_order", order_id=order_id):
+            provider_order = await _call_with_retry(
+                breaker,
+                lambda: provider.create_order(
+                    amount_minor,
+                    currency,
+                    key,
+                    notes={"order_id": order_id, "mandate_id": mandate_id},
+                ),
+            )
     except (RetryExhausted, TerminalProviderError, CircuitOpenError) as exc:
         async with UnitOfWork(session_factory) as uow:
             await uow.payments.transition_status(
@@ -220,7 +231,7 @@ async def create_provider_order(
             )
             await append_entry(
                 uow,
-                trace_id=new_id("trc"),
+                trace_id=trace,
                 actor_type="system",
                 actor_id=actor_id,
                 action=AuditAction.PAYMENT_RESULT,
@@ -289,11 +300,13 @@ async def verify_and_capture(
     provider_signature: str,
     amount_minor: int,
     actor_id: str = "system",
+    trace_id: str | None = None,
 ) -> OrderRecord:
     """`capture()` is textually unreachable unless
     `verify_checkout_signature` returns True — see
     tests/integration/payments/test_checkout_signature.py for a spy-based
     proof that a tampered signature never calls capture()."""
+    trace = trace_id or new_id("trc")
     signature_hash = (
         f"sha256:{hashlib.sha256(provider_signature.encode()).hexdigest()}"
         if provider_signature
@@ -311,7 +324,7 @@ async def verify_and_capture(
         )
         await append_entry(
             uow,
-            trace_id=new_id("trc"),
+            trace_id=trace,
             actor_type="system",
             actor_id=actor_id,
             action=AuditAction.PAYMENT_RESULT,
@@ -326,16 +339,17 @@ async def verify_and_capture(
         raise CheckoutSignatureInvalid(f"checkout signature invalid for order {order_id}")
 
     try:
-        payment = await _call_with_retry(
-            breaker, lambda: provider.capture(provider_payment_id, amount_minor)
-        )
+        with tracing.span("provider.capture", order_id=order_id):
+            payment = await _call_with_retry(
+                breaker, lambda: provider.capture(provider_payment_id, amount_minor)
+            )
     except (RetryExhausted, TerminalProviderError, CircuitOpenError) as exc:
         await uow.payments.transition_status(
             order_id, "FAILED", updated_at=clock.now(), decline_reason=str(exc)[:500]
         )
         await append_entry(
             uow,
-            trace_id=new_id("trc"),
+            trace_id=trace,
             actor_type="system",
             actor_id=actor_id,
             action=AuditAction.PAYMENT_RESULT,
@@ -354,7 +368,7 @@ async def verify_and_capture(
     )
     await append_entry(
         uow,
-        trace_id=new_id("trc"),
+        trace_id=trace,
         actor_type="system",
         actor_id=actor_id,
         action=AuditAction.PAYMENT_RESULT,
@@ -401,23 +415,24 @@ async def process_webhook_delivery(
     state transition, no worker work. This is the single verification path
     both the HTTP receiver and `actl replay-webhook` go through, so
     neither can accidentally diverge on this guarantee."""
-    if not provider.verify_webhook(raw_body, signature):
-        return WebhookReceipt(outcome="invalid_signature")
-    if not event_id:
-        # Can't dedupe safely without one; a valid signature alone is not
-        # enough to accept a delivery we can never idempotently replay.
-        return WebhookReceipt(outcome="missing_event_id")
+    with tracing.span("use_case.process_webhook_delivery", event_type=event_type):
+        if not provider.verify_webhook(raw_body, signature):
+            return WebhookReceipt(outcome="invalid_signature")
+        if not event_id:
+            # Can't dedupe safely without one; a valid signature alone is not
+            # enough to accept a delivery we can never idempotently replay.
+            return WebhookReceipt(outcome="missing_event_id")
 
-    is_new = await uow.webhook_events.claim(
-        WebhookEventRecord(
-            provider_event_id=event_id,
-            event_type=event_type,
-            signature_valid=True,
-            payload=payload,
+        is_new = await uow.webhook_events.claim(
+            WebhookEventRecord(
+                provider_event_id=event_id,
+                event_type=event_type,
+                signature_valid=True,
+                payload=payload,
+            )
         )
-    )
-    await uow.commit()
-    return WebhookReceipt(outcome="accepted" if is_new else "duplicate")
+        await uow.commit()
+        return WebhookReceipt(outcome="accepted" if is_new else "duplicate")
 
 
 async def process_unprocessed_webhooks(
@@ -435,59 +450,74 @@ async def process_unprocessed_webhooks(
     integrity halt is tripped."""
     await raise_if_halted(uow)
     processed_ids: list[str] = []
-    for event in await uow.webhook_events.list_unprocessed():
-        await _apply_webhook_event(uow, clock, event, actor_id=actor_id)
-        await uow.webhook_events.mark_processed(event.provider_event_id, processed_at=clock.now())
-        processed_ids.append(event.provider_event_id)
-    await uow.commit()
-    return processed_ids
+    with tracing.span("worker.process_unprocessed_webhooks"):
+        for event in await uow.webhook_events.list_unprocessed():
+            await _apply_webhook_event(uow, clock, event, actor_id=actor_id)
+            await uow.webhook_events.mark_processed(
+                event.provider_event_id, processed_at=clock.now()
+            )
+            processed_ids.append(event.provider_event_id)
+        await uow.commit()
+        return processed_ids
 
 
 async def _apply_webhook_event(
     uow: UnitOfWork, clock: Clock, event: WebhookEventRecord, *, actor_id: str
 ) -> None:
-    payment_entity = _extract_payment_entity(event.payload)
-    provider_order_id = payment_entity.get("order_id") if payment_entity else None
-    provider_payment_id = payment_entity.get("id") if payment_entity else None
-    if not provider_order_id:
-        return
+    """Each webhook event is its own transaction (§22: "one trace_id
+    generated at the edge") -- the edge here is this event's own arrival,
+    not the original purchase it settles, since it can land minutes or
+    hours later on a completely different process."""
+    trace_id = new_id("trc")
+    with tracing.transaction_span(
+        "worker.apply_webhook_event", trace_id, provider_event_id=event.provider_event_id
+    ):
+        payment_entity = extract_payment_entity(event.payload)
+        provider_order_id = payment_entity.get("order_id") if payment_entity else None
+        provider_payment_id = payment_entity.get("id") if payment_entity else None
+        if not provider_order_id:
+            return
 
-    order = await uow.payments.get_by_provider_order_id(cast(str, provider_order_id))
-    if order is None or order.status in TERMINAL_STATUSES:
-        return  # unknown order, or already settled — webhooks are evidence, never re-applied
+        order = await uow.payments.get_by_provider_order_id(cast(str, provider_order_id))
+        if order is None or order.status in TERMINAL_STATUSES:
+            return  # unknown order, or already settled — webhooks are evidence, never re-applied
 
-    if event.event_type == "payment.captured":
-        await uow.payments.transition_status(
-            order.id,
-            "CAPTURED",
-            updated_at=clock.now(),
-            provider_payment_id=str(provider_payment_id),
+        if event.event_type == "payment.captured":
+            await uow.payments.transition_status(
+                order.id,
+                "CAPTURED",
+                updated_at=clock.now(),
+                provider_payment_id=str(provider_payment_id),
+            )
+            status = "captured"
+        elif event.event_type == "payment.failed":
+            await uow.payments.transition_status(
+                order.id,
+                "FAILED",
+                updated_at=clock.now(),
+                provider_payment_id=str(provider_payment_id) if provider_payment_id else None,
+                decline_reason="payment.failed webhook",
+            )
+            status = "failed"
+        else:
+            return  # e.g. payment.authorized — not terminal, no transition needed
+
+        await append_entry(
+            uow,
+            trace_id=trace_id,
+            actor_type="system",
+            actor_id=actor_id,
+            action=AuditAction.PAYMENT_RESULT,
+            subject={"order_id": order.id},
+            payload={
+                "status": status,
+                "source": "webhook",
+                "provider_payment_id": provider_payment_id,
+            },
         )
-        status = "captured"
-    elif event.event_type == "payment.failed":
-        await uow.payments.transition_status(
-            order.id,
-            "FAILED",
-            updated_at=clock.now(),
-            provider_payment_id=str(provider_payment_id) if provider_payment_id else None,
-            decline_reason="payment.failed webhook",
-        )
-        status = "failed"
-    else:
-        return  # e.g. payment.authorized — not terminal, no transition needed
-
-    await append_entry(
-        uow,
-        trace_id=new_id("trc"),
-        actor_type="system",
-        actor_id=actor_id,
-        action=AuditAction.PAYMENT_RESULT,
-        subject={"order_id": order.id},
-        payload={"status": status, "source": "webhook", "provider_payment_id": provider_payment_id},
-    )
 
 
-def _extract_payment_entity(payload: dict[str, object]) -> dict[str, object] | None:
+def extract_payment_entity(payload: dict[str, object]) -> dict[str, object] | None:
     body = payload.get("payload")
     if not isinstance(body, dict):
         return None
@@ -524,55 +554,72 @@ async def reconcile_non_terminal_orders(
     await raise_if_halted(uow)
     cutoff = clock.now() - timedelta(seconds=reconcile_after_s or settings.reconcile_after_s)
     outcomes: list[ReconciliationOutcome] = []
-    for order in await uow.orders.list_non_terminal_older_than(cutoff):
-        provider_order_id = order.provider_order_id
-        if provider_order_id is None:
-            outcomes.append(ReconciliationOutcome(order.id, "skipped"))
-            continue
+    due = await uow.orders.list_non_terminal_older_than(cutoff)
+    ages_s = [(clock.now() - o.created_at).total_seconds() for o in due if o.created_at is not None]
+    metrics.reconciliation_lag_seconds.set(max(ages_s) if ages_s else 0.0)
+    for order in due:
+        # Each order's reconciliation attempt is its own transaction (same
+        # "one trace_id per independent worker event" reasoning as
+        # `_apply_webhook_event` above) -- this poll, not the original
+        # purchase, is the edge for whatever it discovers.
+        trace_id = new_id("trc")
+        with tracing.transaction_span(
+            "worker.reconcile_order", trace_id, order_id=order.id
+        ):
+            provider_order_id = order.provider_order_id
+            if provider_order_id is None:
+                outcomes.append(ReconciliationOutcome(order.id, "skipped"))
+                continue
 
-        async def _fetch(oid: str = provider_order_id) -> list[ProviderPayment]:
-            return await provider.fetch_payments(oid)
+            async def _fetch(oid: str = provider_order_id) -> list[ProviderPayment]:
+                return await provider.fetch_payments(oid)
 
-        try:
-            payments = await _call_with_retry(breaker, _fetch)
-        except (RetryExhausted, TerminalProviderError, CircuitOpenError):
-            outcomes.append(ReconciliationOutcome(order.id, "poll_failed"))
-            continue
+            try:
+                with tracing.span("provider.fetch_payments", order_id=order.id):
+                    payments = await _call_with_retry(breaker, _fetch)
+            except (RetryExhausted, TerminalProviderError, CircuitOpenError):
+                outcomes.append(ReconciliationOutcome(order.id, "poll_failed"))
+                continue
 
-        latest = _latest_payment(payments)
-        if latest is None:
-            outcomes.append(ReconciliationOutcome(order.id, "still_pending"))
-            continue
+            latest = _latest_payment(payments)
+            if latest is None:
+                outcomes.append(ReconciliationOutcome(order.id, "still_pending"))
+                continue
 
-        if latest.status == "captured":
-            await uow.payments.transition_status(
-                order.id, "CAPTURED", updated_at=clock.now(), provider_payment_id=latest.id
-            )
-            await _audit_reconciled(uow, order.id, "captured", latest, actor_id)
-            outcomes.append(ReconciliationOutcome(order.id, "captured"))
-        elif latest.status == "failed":
-            await uow.payments.transition_status(
-                order.id,
-                "FAILED",
-                updated_at=clock.now(),
-                provider_payment_id=latest.id,
-                decline_reason=latest.error_code or "declined",
-            )
-            await _audit_reconciled(uow, order.id, "failed", latest, actor_id)
-            outcomes.append(ReconciliationOutcome(order.id, "failed"))
-        else:
-            outcomes.append(ReconciliationOutcome(order.id, "still_pending"))
+            if latest.status == "captured":
+                await uow.payments.transition_status(
+                    order.id, "CAPTURED", updated_at=clock.now(), provider_payment_id=latest.id
+                )
+                await _audit_reconciled(uow, order.id, "captured", latest, actor_id, trace_id)
+                outcomes.append(ReconciliationOutcome(order.id, "captured"))
+            elif latest.status == "failed":
+                await uow.payments.transition_status(
+                    order.id,
+                    "FAILED",
+                    updated_at=clock.now(),
+                    provider_payment_id=latest.id,
+                    decline_reason=latest.error_code or "declined",
+                )
+                await _audit_reconciled(uow, order.id, "failed", latest, actor_id, trace_id)
+                outcomes.append(ReconciliationOutcome(order.id, "failed"))
+            else:
+                outcomes.append(ReconciliationOutcome(order.id, "still_pending"))
 
     await uow.commit()
     return outcomes
 
 
 async def _audit_reconciled(
-    uow: UnitOfWork, order_id: str, status: str, payment: ProviderPayment, actor_id: str
+    uow: UnitOfWork,
+    order_id: str,
+    status: str,
+    payment: ProviderPayment,
+    actor_id: str,
+    trace_id: str,
 ) -> None:
     await append_entry(
         uow,
-        trace_id=new_id("trc"),
+        trace_id=trace_id,
         actor_type="system",
         actor_id=actor_id,
         action=AuditAction.PAYMENT_RESULT,

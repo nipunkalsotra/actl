@@ -3,12 +3,13 @@ and the read-only audit API (§5.1). At P0 only the health surface exists."""
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
 import redis.asyncio as redis
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -16,8 +17,9 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from actl.config import settings
 from actl.infrastructure.providers.factory import build_payment_provider
 from actl.interfaces.agent import routes as agent_routes
-from actl.interfaces.http.routers import admin, catalog, growth, well_known
+from actl.interfaces.http.routers import admin, audit, catalog, growth, well_known
 from actl.interfaces.webhooks import razorpay as razorpay_webhooks
+from actl.platform import metrics
 from actl.platform.breaker import CircuitBreaker
 from actl.platform.clock import SystemClock
 from actl.platform.logging import configure_logging, get_logger
@@ -54,10 +56,37 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Agentic Commerce Trust Layer", lifespan=lifespan)
 app.include_router(catalog.router)
 app.include_router(admin.router)
+app.include_router(audit.router)
 app.include_router(growth.router)
 app.include_router(well_known.router)
 app.include_router(razorpay_webhooks.router)
 app.include_router(agent_routes.router)
+
+
+@app.middleware("http")
+async def _red_metrics(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """§22 RED per endpoint. `route` is the path *template* (e.g.
+    "/agent/v1/messages"), never the raw URL -- a path param would make
+    this an unbounded-cardinality label (§28 P10 instruction 2)."""
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_s = time.perf_counter() - start
+    route = request.scope.get("route")
+    route_path = route.path if route is not None else "unmatched"
+    metrics.http_requests_total.labels(
+        route=route_path, method=request.method, status=str(response.status_code)
+    ).inc()
+    metrics.http_request_duration_seconds.labels(route=route_path, method=request.method).observe(
+        duration_s
+    )
+    return response
+
+
+@app.get("/metrics")
+async def metrics_endpoint() -> Response:
+    return Response(content=metrics.render(), media_type="text/plain; version=0.0.4")
 
 
 @app.get("/healthz")

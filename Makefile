@@ -40,4 +40,5 @@ lint:
 	uv run lint-imports
 
 bundle:
-	uv run python scripts/export_audit_bundle.py
+	uv run python scripts/export_audit_bundle.py --to \
+		$$(uv run python -m actl.cli chain-head | grep -oE 'seq=[0-9]+' | cut -d= -f2)

@@ -5,7 +5,7 @@
       "action": "quote.issued",
       "actor_id": "agt_demo_declined",
       "actor_type": "agent",
-      "entry_hash": "sha256:11473404992802d9eaa73d0cc70a051be1c0cb5bd15858273d4e439e12272f6a",
+      "entry_hash": "sha256:505e31ff5880ac7cbddc55138ba2376dcca2ab43647ac9b804b53657ef570c31",
       "payload": {
         "catalog_version": 2,
         "expires_at": "2026-01-15T09:02:00+00:00",
@@ -13,33 +13,33 @@
         "sku": "HTL-DEMO-DECLINED"
       },
       "payload_hash": "sha256:9a7a62aa5f3c61411dd5f1ae43cdbc9c69106e0de0f673834133fd3209639f60",
-      "prev_hash": "sha256:df4e9d98bd204f5ec9d00e8d3c85200f429b206ebbf30de355c6bd6c625a5e46",
+      "prev_hash": "sha256:e67b27b0080611d8e538929620aabf361e2ecc4a3fbd6f915329d9efd93a1af8",
       "seq": 17,
       "subject": {
-        "quote_id": "qte_7WCA3BVTMAS5ACW3AFNN6E6TR4",
+        "quote_id": "qte_53AWX2F4MYQ512KRAAPA09KCHN",
         "sku": "HTL-DEMO-DECLINED"
       },
-      "trace_id": "trc_53AWX2F4MYQ512KRAAPA09KCHN"
+      "trace_id": "trc_7WCA3BVTMAS5ACW3AFNN6E6TR4"
     },
     {
       "action": "order.proposed",
       "actor_id": "agt_demo_declined",
       "actor_type": "agent",
-      "entry_hash": "sha256:89fc410fb6a52aa818f28455adc3b73a5257adde767c3f654c4b0af96c1755aa",
+      "entry_hash": "sha256:fe75d714e5be4bdc7e4e646754744caf16b4904bc17e3413248e355bcee3d4e6",
       "payload": {
         "mandate_id": "mdt_24FJWTY982TQ7J3HW0ND50KK48",
-        "quote_id": "qte_7WCA3BVTMAS5ACW3AFNN6E6TR4",
+        "quote_id": "qte_53AWX2F4MYQ512KRAAPA09KCHN",
         "reason_codes": [
           "OK"
         ],
         "verdict": "ALLOW"
       },
-      "payload_hash": "sha256:57474c7050420eb64f7fb36403b1160e559d7735b165248a2da75bac8cdb250f",
-      "prev_hash": "sha256:11473404992802d9eaa73d0cc70a051be1c0cb5bd15858273d4e439e12272f6a",
+      "payload_hash": "sha256:7afa71bb083a6f927522e19e2c6e117bf3d269710530c73921de86f493f1670b",
+      "prev_hash": "sha256:505e31ff5880ac7cbddc55138ba2376dcca2ab43647ac9b804b53657ef570c31",
       "seq": 18,
       "subject": {
         "mandate_id": "mdt_24FJWTY982TQ7J3HW0ND50KK48",
-        "quote_id": "qte_7WCA3BVTMAS5ACW3AFNN6E6TR4"
+        "quote_id": "qte_53AWX2F4MYQ512KRAAPA09KCHN"
       },
       "trace_id": "trc_4W6T11HQDS0BQNWD991NJNZNEH"
     },
@@ -47,7 +47,7 @@
       "action": "budget.reserved",
       "actor_id": "agt_demo_declined",
       "actor_type": "system",
-      "entry_hash": "sha256:9677ae7153122b44d82a83bfd76643a40038a569bc9f79b02088ac9858d192cc",
+      "entry_hash": "sha256:c403802b5f58d95f5a36d456d4cad522cefe352484100f2d8087728cbab43554",
       "payload": {
         "amount_minor": 840000,
         "currency": "INR",
@@ -55,7 +55,7 @@
         "ref_id": "ik_0374822caa08e0b5b1f175ce126b1642"
       },
       "payload_hash": "sha256:ea991dcef7d0002c040fecb5c68991fa3e7d4e7536a3bc2911ba229b81186870",
-      "prev_hash": "sha256:89fc410fb6a52aa818f28455adc3b73a5257adde767c3f654c4b0af96c1755aa",
+      "prev_hash": "sha256:fe75d714e5be4bdc7e4e646754744caf16b4904bc17e3413248e355bcee3d4e6",
       "seq": 19,
       "subject": {
         "mandate_id": "mdt_24FJWTY982TQ7J3HW0ND50KK48",
@@ -67,7 +67,7 @@
       "action": "payment.intent",
       "actor_id": "agt_demo_declined",
       "actor_type": "system",
-      "entry_hash": "sha256:8359986cae5a9599488ad44d523a83671398889335e4d6606f871110953dd483",
+      "entry_hash": "sha256:df6c319333c22d4b95c999bd34757e714fb7d3fc17874910cfeaccbef7c3e3e5",
       "payload": {
         "amount_minor": 840000,
         "currency": "INR",
@@ -79,19 +79,19 @@
         "provider": "simulator"
       },
       "payload_hash": "sha256:62764add3e24ba1ab35745885474b921dc706734ad5f2976ce3a576904653a7b",
-      "prev_hash": "sha256:9677ae7153122b44d82a83bfd76643a40038a569bc9f79b02088ac9858d192cc",
+      "prev_hash": "sha256:c403802b5f58d95f5a36d456d4cad522cefe352484100f2d8087728cbab43554",
       "seq": 20,
       "subject": {
         "mandate_id": "mdt_24FJWTY982TQ7J3HW0ND50KK48",
         "order_id": "ord_0M17C68R6Q33H9TZ66GQGZ22Z6"
       },
-      "trace_id": "trc_1KKX4XX92WWXS63EJ40BW0SB8Y"
+      "trace_id": "trc_4W6T11HQDS0BQNWD991NJNZNEH"
     },
     {
       "action": "compensation.applied",
       "actor_id": "agt_demo_declined",
       "actor_type": "system",
-      "entry_hash": "sha256:4e4e8d1e6c103df44a62c455aebddaec44c075960ebdb725aca275956b5ec977",
+      "entry_hash": "sha256:c768d108186580d915547c1a9ae6f74e57390bd3ed5feeb3c548fc940de3f8a8",
       "payload": {
         "amount_minor": 840000,
         "mandate_id": "mdt_24FJWTY982TQ7J3HW0ND50KK48",
@@ -101,14 +101,14 @@
         "released": true
       },
       "payload_hash": "sha256:8453d5c1ca32d737c8c18dd9a024a3fcb4fb4ff505fbba50e3fa453315039834",
-      "prev_hash": "sha256:8359986cae5a9599488ad44d523a83671398889335e4d6606f871110953dd483",
+      "prev_hash": "sha256:df6c319333c22d4b95c999bd34757e714fb7d3fc17874910cfeaccbef7c3e3e5",
       "seq": 21,
       "subject": {
         "mandate_id": "mdt_24FJWTY982TQ7J3HW0ND50KK48",
         "order_id": "ord_0M17C68R6Q33H9TZ66GQGZ22Z6",
         "ref_id": "ik_0374822caa08e0b5b1f175ce126b1642"
       },
-      "trace_id": "trc_3RER4FJ60V3813SKK39X357G87"
+      "trace_id": "trc_1M9FZW6KD33Z7MAMZ5SR1RYMED"
     }
   ],
   "mandate_id": "mdt_24FJWTY982TQ7J3HW0ND50KK48",

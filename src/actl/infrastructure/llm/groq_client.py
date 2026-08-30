@@ -21,6 +21,7 @@ from actl.application.ports import LLMUnavailable
 from actl.infrastructure.cache.rate_limit import RateLimitUnavailable, TokenBucketLimiter
 from actl.infrastructure.cache.semantic_cache import SemanticCache
 from actl.infrastructure.llm.canonical_prompt import canonical_prompt_key
+from actl.platform import metrics
 from actl.platform.breaker import CircuitBreaker
 from actl.platform.errors import CircuitOpenError
 
@@ -58,6 +59,7 @@ class GroqClient:
         cache_key = canonical_prompt_key(mode=mode, model=self._model, system=system, user=user)
         cached = await self._cache.get(cache_key)
         if cached is not None:
+            metrics.llm_cache_hits_total.inc()
             return cached
 
         try:

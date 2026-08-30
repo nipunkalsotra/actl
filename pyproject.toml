@@ -15,6 +15,9 @@ dependencies = [
     "httpx2>=2.12.0",
     "cryptography>=43.0",
     "groq>=0.31",
+    "opentelemetry-api>=1.27",
+    "opentelemetry-sdk>=1.27",
+    "prometheus-client>=0.21",
 ]
 
 [dependency-groups]
@@ -62,7 +65,13 @@ warn_unused_ignores = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=actl --cov-report=term-missing"
+# §28 P10 release-readiness correction: coverage used to be a global
+# addopts side effect (--cov=actl on every invocation), which made
+# pytest-cov union any CLI --cov=<narrower target> into the whole-package
+# total -- `pytest --cov=actl.application.gate --cov-fail-under=100`
+# was checking 86% package coverage, not gate.py's own 100%. Coverage is
+# now opt-in: pass --cov explicitly (see docs/architecture.md §28 for the
+# P1 domain.policy and P10 application.gate 100% gates).
 markers = [
     "real_provider: makes a real network call to a live payment provider API; opt-in only, see tests/integration/payments/test_razorpay_live_smoke.py",
 ]
@@ -70,3 +79,14 @@ markers = [
 [tool.coverage.run]
 source = ["actl"]
 branch = true
+# §28 P10 release-readiness correction: coverage.py's default core on
+# Python 3.12+ is sys.monitoring (PEP 669), which has a real blind spot
+# for lines executed inside an asyncio.create_task()-spawned task that's
+# awaited separately from where it's created (confirmed empirically --
+# a line proven to execute via a direct print() still reports as
+# "missing" under sysmon, and is correctly reported "covered" under the
+# legacy ctrace engine). tests/integration/gate/test_gate_concurrency.py
+# deliberately uses that pattern to control a real concurrent race
+# deterministically -- ctrace is what makes --cov-fail-under=100 on
+# application/gate.py measure the truth.
+core = "ctrace"

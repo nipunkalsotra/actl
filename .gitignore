@@ -12,3 +12,4 @@ dist/
 demo/*.cast
 demo_suite_bundle/
 demo_recording.txt
+audit_bundle/

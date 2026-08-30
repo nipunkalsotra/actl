@@ -20,6 +20,7 @@ from actl.domain.mandate.hashing import compute_spec_hash
 from actl.domain.mandate.models import MandateSignature
 from actl.domain.mandate.signing import sign_spec_hash
 from actl.domain.mandate.state_machine import MandateStatus
+from actl.domain.policy.decision import DecisionRecord
 from actl.domain.policy.reason_codes import ReasonCode
 from actl.infrastructure.db.uow import UnitOfWork
 from actl.infrastructure.providers.simulator.adapter import Scenario, SimulatorAdapter
@@ -219,6 +220,38 @@ async def test_gate_g1_rejects_a_mandate_signed_with_the_wrong_key(
     assert result.reason_code == ReasonCode.MANDATE_UNSIGNED
 
 
+async def test_gate_g1_rejects_a_mandate_with_no_signature_at_all(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """§28 P10 release-readiness correction: the wrong-key test above
+    exercises `verify_signature(...)` returning False; this exercises the
+    *other*, textually-earlier MANDATE_UNSIGNED check --
+    `mandate.spec_hash is None or mandate.signature is None` -- which no
+    other test reached. A LOCKED mandate can never have a null signature
+    (the database's own `locked_has_hash` check constraint, migrations/
+    versions/0001_core.py, enforces this at the schema level -- signature
+    is the one field a *LOCKED* mandate is guaranteed to have); the
+    constraint names LOCKED specifically, so EXECUTING is the one status
+    G1 accepts that can still legitimately reach this check unsigned."""
+    clock = SystemClock()
+    mandate = make_locked_mandate()
+    unsigned = mandate.model_copy(update={"signature": None})
+    assert compute_spec_hash(unsigned) == unsigned.spec_hash  # content, hence spec_hash, unchanged
+    await seed_mandate(session_factory, unsigned, status=MandateStatus.EXECUTING)
+    intent_hash = fake_hash(new_id("intent"))
+    decision_id = await seed_decision(
+        session_factory, clock, mandate=unsigned, intent_hash=intent_hash, verdict="ALLOW"
+    )
+    quote_id = await seed_quote(session_factory, clock, mandate_id=unsigned.mandate_id)
+    fixture = GateFixture(unsigned, decision_id, quote_id, intent_hash, 840000)
+    provider, breaker = _provider_and_breaker(clock)
+
+    result = await execute_money_action(_req(fixture), session_factory, provider, clock, breaker)
+
+    assert result.verdict == "DENY"
+    assert result.reason_code == ReasonCode.MANDATE_UNSIGNED
+
+
 async def test_gate_g1_rejects_expired_mandate(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -268,6 +301,47 @@ async def test_gate_g2_rejects_unknown_decision(
     req = replace(_req(fixture), decision_id="dec_does_not_exist")
 
     result = await execute_money_action(req, session_factory, provider, clock, breaker)
+
+    assert result.verdict == "DENY"
+    assert result.reason_code == ReasonCode.INTENT_MISMATCH
+
+
+async def test_gate_g2_rejects_a_decision_bound_to_a_different_mandate_spec_hash(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """§28 P10 release-readiness correction: `decision.mandate_spec_hash
+    != mandate.spec_hash` -- decision drift, e.g. the mandate was
+    re-signed after this decision was evaluated -- is a *different*
+    INTENT_MISMATCH trigger than `test_gate_g2_rejects_decision_for_other_
+    intent`'s mismatched `intent_hash`; both share the same reason code
+    but are reached by different conditions."""
+    clock = SystemClock()
+    mandate = make_locked_mandate()
+    await seed_mandate(session_factory, mandate)
+    intent_hash = fake_hash(new_id("intent"))
+    decision_id = new_id("dec")
+    async with UnitOfWork(session_factory) as uow:
+        await uow.decisions.add(
+            DecisionRecord(
+                decision_id=decision_id,
+                engine_version="v1",
+                mandate_id=mandate.mandate_id,
+                mandate_spec_hash=fake_hash("a-different-mandate-spec"),
+                intent_hash=intent_hash,
+                verdict="ALLOW",
+                reason_codes=[],
+                rule_trace=[],
+                evaluated_at=clock.now(),
+                ttl_s=30,
+                inputs_digest=fake_hash(decision_id),
+            )
+        )
+        await uow.commit()
+    quote_id = await seed_quote(session_factory, clock, mandate_id=mandate.mandate_id)
+    fixture = GateFixture(mandate, decision_id, quote_id, intent_hash, 840000)
+    provider, breaker = _provider_and_breaker(clock)
+
+    result = await execute_money_action(_req(fixture), session_factory, provider, clock, breaker)
 
     assert result.verdict == "DENY"
     assert result.reason_code == ReasonCode.INTENT_MISMATCH
@@ -565,6 +639,34 @@ async def test_gate_never_raises_on_unexpected_internal_failure(
 
     assert result.verdict == "DENY"
     assert result.reason_code == ReasonCode.INTERNAL_ERROR
+
+
+async def test_gate_never_raises_when_g1_g5_itself_fails_unexpectedly(
+    session_factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§28 P10 release-readiness correction: the test above breaks the
+    halt-check's own try/except (`execute_money_action`'s very first
+    UnitOfWork); this is the *other*, textually-later except-Exception --
+    around `retry_with_full_jitter(lambda: _attempt_g1_through_g5(...))`
+    -- reached only once the halt-check and malformed-input guard have
+    already passed. Nothing durable happens on this path (G1-G5 never
+    got to run), so there is no reservation to have leaked."""
+    import actl.application.gate as gate_module
+
+    clock = SystemClock()
+    fixture = await seed_valid_gate_fixture(session_factory, clock)
+    provider, breaker = _provider_and_breaker(clock)
+
+    async def _boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("simulated unexpected G1-G5 failure -- not a DBAPIError, never retried")
+
+    monkeypatch.setattr(gate_module, "_attempt_g1_through_g5", _boom)
+
+    result = await execute_money_action(_req(fixture), session_factory, provider, clock, breaker)
+
+    assert result.verdict == "DENY"
+    assert result.reason_code == ReasonCode.INTERNAL_ERROR
+    assert await _reserved_balance(session_factory, fixture.mandate.mandate_id) == 0
 
 
 # ---------------------------------------------------------------------------

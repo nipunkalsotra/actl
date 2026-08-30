@@ -14,6 +14,7 @@ from collections.abc import Callable
 from pydantic import BaseModel, ValidationError
 
 from actl.application.ports import LLMClient, LLMUnavailable
+from actl.platform import metrics, tracing
 
 
 async def complete_json_with_repair[ModelT: BaseModel](
@@ -29,13 +30,22 @@ async def complete_json_with_repair[ModelT: BaseModel](
     `LLMUnavailable` if either call fails outright (propagated as-is from
     `llm.complete_json`), or if both attempts produce JSON that still
     doesn't validate against `schema` -- either way, the caller's existing
-    deterministic fallback is what runs next."""
-    raw = await llm.complete_json(system=system, user=user_prompt, max_tokens=max_tokens)
+    deterministic fallback is what runs next.
+
+    Span attributes here are deliberately limited to `schema`/`attempt` --
+    never `system`/`user_prompt`/the raw response, which may carry
+    untrusted buyer text (§22: never put "full untrusted prompt text into
+    span attributes")."""
+    metrics.llm_calls_total.labels(attempt="1").inc()
+    with tracing.span("llm.complete_json", schema=schema.__name__, attempt=1):
+        raw = await llm.complete_json(system=system, user=user_prompt, max_tokens=max_tokens)
     try:
         return schema.model_validate(raw)
     except ValidationError as first_error:
         repair_user = build_repair_prompt(user_prompt, first_error)
-        raw2 = await llm.complete_json(system=system, user=repair_user, max_tokens=max_tokens)
+        metrics.llm_calls_total.labels(attempt="2").inc()
+        with tracing.span("llm.complete_json", schema=schema.__name__, attempt=2):
+            raw2 = await llm.complete_json(system=system, user=repair_user, max_tokens=max_tokens)
         try:
             return schema.model_validate(raw2)
         except ValidationError as second_error:

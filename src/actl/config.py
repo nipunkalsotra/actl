@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     # registry. Placeholder values, same spirit as the Razorpay test key.
     quote_signing_key: str = "demo-quote-signing-key-change-me"
     admin_token: str = "demo-admin-token-change-me"
+    # §28 P10 / Appendix A: "Read token" auth tier for read-only audit
+    # surfaces (GET /audit/explain/{order_id}) -- deliberately a separate
+    # token from admin_token, so a reviewer/dashboard credential can never
+    # also mutate the catalog.
+    read_token: str = "demo-read-token-change-me"
 
     # ---- money action gate (§11, §28 P6) ---------------------------------
     # HMAC key the gate's G1 re-verifies mandate.signature against — same

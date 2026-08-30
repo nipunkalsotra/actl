@@ -57,5 +57,50 @@ jobs:
       - name: Migrate
         run: uv run alembic upgrade head
 
-      - name: Test
+      - name: Unit / property / architecture tests
         run: uv run pytest tests/unit tests/property tests/architecture -q
+
+      # tests/integration, tests/golden, tests/chaos, and tests/contract
+      # each spin their own throwaway Postgres/Redis via testcontainers
+      # (see tests/integration/conftest.py) -- self-contained, no
+      # dependency on the `services:` Postgres/Redis above. Docker is
+      # already available on ubuntu-latest. LLM_ENABLED/PAYMENT_PROVIDER
+      # default to true/razorpay (config.py) -- every one of these must
+      # force them offline explicitly, the same way `make chaos`/`make
+      # demo` already do in the Makefile.
+      - name: Integration tests (incl. observability, audit bundle, explain endpoint)
+        env:
+          LLM_ENABLED: "false"
+          PAYMENT_PROVIDER: simulator
+        run: uv run pytest tests/integration -q
+
+      - name: Golden trace tests
+        env:
+          LLM_ENABLED: "false"
+          PAYMENT_PROVIDER: simulator
+        run: uv run pytest tests/golden -q
+
+      - name: Chaos tests (all ten §20 failure modes)
+        run: make chaos
+
+      - name: Contract tests
+        env:
+          LLM_ENABLED: "false"
+          PAYMENT_PROVIDER: simulator
+        run: uv run pytest tests/contract -q
+
+      # §28 P10 release verification: scripts/demo.sh runs the real six
+      # §20.1 commands against *this* job's `services:` Postgres/Redis
+      # (LLM_ENABLED/PAYMENT_PROVIDER forced offline inside the script
+      # itself), then `make verify` checks that same live chain plus the
+      # committed golden fixtures, offline, independently.
+      - name: Demo scenarios (live, against services Postgres)
+        run: ./scripts/demo.sh
+
+      - name: Verify live chain + golden fixtures
+        run: make verify
+
+      - name: Export and verify audit bundle offline
+        run: |
+          make bundle
+          cd audit_bundle && env -i PATH=/usr/bin:/bin python3 verify_bundle.py
