@@ -29,6 +29,7 @@ from actl.domain.catalog.quote import Quote, build_quote_token, compute_quote_ha
 from actl.infrastructure.db.repositories.catalog import CatalogItemRecord
 from actl.infrastructure.db.repositories.quotes import QuoteRecord
 from actl.infrastructure.db.uow import UnitOfWork
+from actl.platform import tracing
 from actl.platform.clock import Clock
 from actl.platform.errors import ActlError
 from actl.platform.ids import new_id
@@ -105,50 +106,52 @@ async def list_catalog(
 ) -> CatalogFeed:
     """§13.1. Writes a catalog.queried audit entry (§16.3) with the filters
     actually applied and the result count."""
-    decoded_cursor = _decode_cursor(query.cursor) if query.cursor else None
-    version = await uow.catalog.current_version()
+    trace_id = new_id("trc")
+    with tracing.transaction_span("catalog.list_catalog", trace_id, actor_id=actor_id):
+        decoded_cursor = _decode_cursor(query.cursor) if query.cursor else None
+        version = await uow.catalog.current_version()
 
-    rows = await uow.catalog.list_items(
-        category=query.category,
-        location_city=query.location_city,
-        location_country=query.location_country,
-        max_unit_minor=query.max_unit_minor,
-        cursor=decoded_cursor,
-        limit=query.limit + 1,
-    )
-    has_more = len(rows) > query.limit
-    page = rows[: query.limit]
-    next_cursor = (
-        _encode_cursor(page[-1].unit_price_minor, page[-1].sku) if has_more and page else None
-    )
+        rows = await uow.catalog.list_items(
+            category=query.category,
+            location_city=query.location_city,
+            location_country=query.location_country,
+            max_unit_minor=query.max_unit_minor,
+            cursor=decoded_cursor,
+            limit=query.limit + 1,
+        )
+        has_more = len(rows) > query.limit
+        page = rows[: query.limit]
+        next_cursor = (
+            _encode_cursor(page[-1].unit_price_minor, page[-1].sku) if has_more and page else None
+        )
 
-    feed = CatalogFeed(
-        catalog_version=version,
-        generated_at=clock.now(),
-        items=[_to_domain_item(row) for row in page],
-        next_cursor=next_cursor,
-    )
+        feed = CatalogFeed(
+            catalog_version=version,
+            generated_at=clock.now(),
+            items=[_to_domain_item(row) for row in page],
+            next_cursor=next_cursor,
+        )
 
-    await append_entry(
-        uow,
-        trace_id=new_id("trc"),
-        actor_type="agent",
-        actor_id=actor_id,
-        action=AuditAction.CATALOG_QUERIED,
-        subject={"category": query.category, "location": query.location_city},
-        payload={
-            "filters": {
-                "category": query.category,
-                "location_city": query.location_city,
-                "location_country": query.location_country,
-                "max_unit_minor": query.max_unit_minor,
+        await append_entry(
+            uow,
+            trace_id=trace_id,
+            actor_type="agent",
+            actor_id=actor_id,
+            action=AuditAction.CATALOG_QUERIED,
+            subject={"category": query.category, "location": query.location_city},
+            payload={
+                "filters": {
+                    "category": query.category,
+                    "location_city": query.location_city,
+                    "location_country": query.location_country,
+                    "max_unit_minor": query.max_unit_minor,
+                },
+                "catalog_version": version,
+                "result_count": len(page),
             },
-            "catalog_version": version,
-            "result_count": len(page),
-        },
-    )
-    await uow.commit()
-    return feed
+        )
+        await uow.commit()
+        return feed
 
 
 async def create_quote(
@@ -164,65 +167,69 @@ async def create_quote(
     instant, sets expires_at from QUOTE_TTL_S, signs quote_token, persists
     through the P2 quotes repository, and writes a quote.issued audit
     entry -- all in one UnitOfWork transaction."""
-    mandate = await uow.mandates.get(mandate_id)
-    if mandate is None:
-        raise MandateNotFound(f"no mandate {mandate_id}", details={"mandate_id": mandate_id})
+    trace_id = new_id("trc")
+    with tracing.transaction_span("catalog.create_quote", trace_id, mandate_id=mandate_id, sku=sku):
+        mandate = await uow.mandates.get(mandate_id)
+        if mandate is None:
+            raise MandateNotFound(f"no mandate {mandate_id}", details={"mandate_id": mandate_id})
 
-    item = await uow.catalog.get_item(sku)
-    if item is None:
-        raise SkuNotFound(f"no catalog item {sku}", details={"sku": sku})
-    if item.available_units <= 0:
-        raise SkuUnavailable(f"{sku} has no available units", details={"sku": sku})
+        item = await uow.catalog.get_item(sku)
+        if item is None:
+            raise SkuNotFound(f"no catalog item {sku}", details={"sku": sku})
+        if item.available_units <= 0:
+            raise SkuUnavailable(f"{sku} has no available units", details={"sku": sku})
 
-    total_minor = item.unit_price_minor * nights
-    draft = Quote(
-        quote_id=new_id("qte"),
-        sku=item.sku,
-        mandate_id=mandate_id,
-        unit_price_minor=item.unit_price_minor,
-        nights=nights,
-        total_minor=total_minor,
-        catalog_version=item.version,
-        refundable=item.refundable,
-        expires_at=clock.now() + timedelta(seconds=settings.quote_ttl_s),
-    )
-    quote_hash = compute_quote_hash(draft)
-    quote_token = build_quote_token(draft, quote_hash, settings.quote_signing_key.encode("utf-8"))
-    quote = draft.model_copy(update={"quote_hash": quote_hash, "quote_token": quote_token})
-
-    await uow.quotes.add(
-        QuoteRecord(
-            id=quote.quote_id,
-            mandate_id=quote.mandate_id,
-            sku=quote.sku,
-            unit_price_minor=quote.unit_price_minor,
-            nights=quote.nights,
-            total_minor=quote.total_minor,
-            currency=quote.currency,
-            catalog_version=quote.catalog_version,
-            refundable=quote.refundable,
-            quote_token=quote.quote_token or "",
-            quote_hash=quote.quote_hash or "",
-            expires_at=quote.expires_at,
+        total_minor = item.unit_price_minor * nights
+        draft = Quote(
+            quote_id=new_id("qte"),
+            sku=item.sku,
+            mandate_id=mandate_id,
+            unit_price_minor=item.unit_price_minor,
+            nights=nights,
+            total_minor=total_minor,
+            catalog_version=item.version,
+            refundable=item.refundable,
+            expires_at=clock.now() + timedelta(seconds=settings.quote_ttl_s),
         )
-    )
+        quote_hash = compute_quote_hash(draft)
+        quote_token = build_quote_token(
+            draft, quote_hash, settings.quote_signing_key.encode("utf-8")
+        )
+        quote = draft.model_copy(update={"quote_hash": quote_hash, "quote_token": quote_token})
 
-    await append_entry(
-        uow,
-        trace_id=new_id("trc"),
-        actor_type="agent",
-        actor_id=actor_id,
-        action=AuditAction.QUOTE_ISSUED,
-        subject={"sku": quote.sku, "quote_id": quote.quote_id},
-        payload={
-            "sku": quote.sku,
-            "price_minor": quote.unit_price_minor,
-            "catalog_version": quote.catalog_version,
-            "expires_at": quote.expires_at.isoformat(),
-        },
-    )
-    await uow.commit()
-    return quote
+        await uow.quotes.add(
+            QuoteRecord(
+                id=quote.quote_id,
+                mandate_id=quote.mandate_id,
+                sku=quote.sku,
+                unit_price_minor=quote.unit_price_minor,
+                nights=quote.nights,
+                total_minor=quote.total_minor,
+                currency=quote.currency,
+                catalog_version=quote.catalog_version,
+                refundable=quote.refundable,
+                quote_token=quote.quote_token or "",
+                quote_hash=quote.quote_hash or "",
+                expires_at=quote.expires_at,
+            )
+        )
+
+        await append_entry(
+            uow,
+            trace_id=trace_id,
+            actor_type="agent",
+            actor_id=actor_id,
+            action=AuditAction.QUOTE_ISSUED,
+            subject={"sku": quote.sku, "quote_id": quote.quote_id},
+            payload={
+                "sku": quote.sku,
+                "price_minor": quote.unit_price_minor,
+                "catalog_version": quote.catalog_version,
+                "expires_at": quote.expires_at.isoformat(),
+            },
+        )
+        await uow.commit()
+        return quote
 
 
 async def mutate_price_demo_only(
@@ -235,26 +242,28 @@ async def mutate_price_demo_only(
     """§28 P4: demo-only endpoint used to trigger the stale-price scenario.
     Never call this from anything but the admin router — it exists purely
     to move a price out from under an in-flight quote."""
-    if new_unit_price_minor <= 0:
-        raise InvalidPriceMutation("unit_price_minor must be positive")
+    trace_id = new_id("trc")
+    with tracing.transaction_span("catalog.mutate_price_demo_only", trace_id, sku=sku):
+        if new_unit_price_minor <= 0:
+            raise InvalidPriceMutation("unit_price_minor must be positive")
 
-    try:
-        updated = await uow.catalog.mutate_price(sku, new_unit_price_minor)
-    except KeyError as exc:
-        raise SkuNotFound(f"no catalog item {sku}", details={"sku": sku}) from exc
+        try:
+            updated = await uow.catalog.mutate_price(sku, new_unit_price_minor)
+        except KeyError as exc:
+            raise SkuNotFound(f"no catalog item {sku}", details={"sku": sku}) from exc
 
-    await append_entry(
-        uow,
-        trace_id=new_id("trc"),
-        actor_type="admin",
-        actor_id=actor_id,
-        action=AuditAction.CATALOG_PRICE_MUTATED,
-        subject={"sku": sku},
-        payload={
-            "sku": sku,
-            "new_unit_price_minor": new_unit_price_minor,
-            "catalog_version": updated.version,
-        },
-    )
-    await uow.commit()
-    return _to_domain_item(updated)
+        await append_entry(
+            uow,
+            trace_id=trace_id,
+            actor_type="admin",
+            actor_id=actor_id,
+            action=AuditAction.CATALOG_PRICE_MUTATED,
+            subject={"sku": sku},
+            payload={
+                "sku": sku,
+                "new_unit_price_minor": new_unit_price_minor,
+                "catalog_version": updated.version,
+            },
+        )
+        await uow.commit()
+        return _to_domain_item(updated)

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -37,6 +38,7 @@ Usage: python3 verify_bundle.py [bundle_dir]   (defaults to this script's own di
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -55,8 +57,37 @@ def _load_ndjson(path: Path) -> list[dict]:
     return entries
 
 
+def _verify_manifest(bundle_dir: Path) -> bool:
+    """§28 P10 instruction 5: file-level tamper evidence -- catches a
+    swapped/corrupted/truncated evidence file *before* any chain-semantic
+    check runs, independent of whether that swap happens to still look
+    internally consistent. Only the raw evidence files are manifested
+    (never verify_bundle.py itself -- a self-hash-check a compromised
+    script could simply skip is no real protection)."""
+    manifest_path = bundle_dir / "manifest.json"
+    if not manifest_path.exists():
+        print("MANIFEST MISSING: manifest.json not found in bundle")
+        return False
+    manifest = json.loads(manifest_path.read_text())
+    for filename, expected_hash in manifest["files"].items():
+        target = bundle_dir / filename
+        if not target.exists():
+            print(f"MANIFEST MISMATCH: {filename} listed in manifest but missing from bundle")
+            return False
+        actual_hash = "sha256:" + hashlib.sha256(target.read_bytes()).hexdigest()
+        if actual_hash != expected_hash:
+            print(f"MANIFEST MISMATCH: {filename}")
+            print(f"  expected {expected_hash}")
+            print(f"  computed {actual_hash}")
+            return False
+    print(f"manifest verified ({len(manifest['files'])} files) ........... ok")
+    return True
+
+
 def main() -> int:
     bundle_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent
+    if not _verify_manifest(bundle_dir):
+        return 1
     entries = _load_ndjson(bundle_dir / "audit_log.ndjson")
     checkpoints = json.loads((bundle_dir / "checkpoints.json").read_text())
     metadata = json.loads((bundle_dir / "metadata.json").read_text())
@@ -232,6 +263,24 @@ async def export_bundle(
     )
 
     (output_dir / "verify_bundle.py").write_text(_build_verify_script())
+
+    # §28 P10 instruction 5: file-level tamper evidence for the three
+    # evidence files -- never verify_bundle.py itself (see _verify_manifest's
+    # own docstring in the embedded template for why a self-check is no
+    # real protection).
+    manifest_path = output_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": datetime.now(UTC).isoformat(),
+                "files": {
+                    name: "sha256:" + hashlib.sha256((output_dir / name).read_bytes()).hexdigest()
+                    for name in ("audit_log.ndjson", "checkpoints.json", "metadata.json")
+                },
+            },
+            indent=2,
+        )
+    )
 
 
 def main() -> None:

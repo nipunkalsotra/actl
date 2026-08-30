@@ -23,6 +23,7 @@ class WebhookEventRecord:
     signature_valid: bool
     payload: dict[str, object]
     processed_at: datetime | None = None
+    received_at: datetime | None = None
 
 
 class WebhookEventRepository:
@@ -88,6 +89,13 @@ class WebhookEventRepository:
             raise KeyError(provider_event_id)
         row.processed_at = processed_at
 
+    async def list_all(self) -> list[WebhookEventRecord]:
+        """§28 P10 explain endpoint: every delivery ever received, not just
+        the unprocessed queue -- the full history is what a causal timeline
+        needs, filtered by the caller to the one order it cares about."""
+        result = await self._session.execute(select(WebhookEventRow).order_by(WebhookEventRow.id))
+        return [_to_record(row) for row in result.scalars()]
+
 
 def _to_record(row: WebhookEventRow) -> WebhookEventRecord:
     return WebhookEventRecord(
@@ -96,4 +104,5 @@ def _to_record(row: WebhookEventRow) -> WebhookEventRecord:
         signature_valid=row.signature_valid,
         payload=row.payload,
         processed_at=row.processed_at,
+        received_at=row.received_at,
     )

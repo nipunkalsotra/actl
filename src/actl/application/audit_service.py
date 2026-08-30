@@ -34,6 +34,7 @@ from actl.domain.audit.merkle import merkle_root
 from actl.infrastructure.db.repositories.audit_checkpoints import AuditCheckpointRecord
 from actl.infrastructure.db.repositories.audit_log import AuditLogRecord
 from actl.infrastructure.db.uow import UnitOfWork
+from actl.platform import metrics, tracing
 from actl.platform.clock import Clock
 
 DEFAULT_CHAIN_ID = "actl.audit_log"
@@ -60,37 +61,39 @@ async def append_entry(
     the same no-anchoring behaviour a `NoopAnchor` would give, or pass one
     explicitly (e.g. `infrastructure.anchor.noop.NoopAnchor()`) to make that
     choice visible at the call site."""
-    await uow.audit_log.acquire_chain_lock(chain_id)
+    with tracing.span("audit.append_entry", action=str(action)):
+        await uow.audit_log.acquire_chain_lock(chain_id)
 
-    tail = await uow.audit_log.get_tail()
-    if tail is None:
-        seq = 1
-        prev_hash = GENESIS_PREV_HASH
-    else:
-        prev_seq, prev_entry_hash_hex = tail
-        seq = prev_seq + 1
-        prev_hash = parse_hex_prefixed(prev_entry_hash_hex)
+        tail = await uow.audit_log.get_tail()
+        if tail is None:
+            seq = 1
+            prev_hash = GENESIS_PREV_HASH
+        else:
+            prev_seq, prev_entry_hash_hex = tail
+            seq = prev_seq + 1
+            prev_hash = parse_hex_prefixed(prev_entry_hash_hex)
 
-    entry_hash = compute_entry_hash(prev_hash, payload)
+        entry_hash = compute_entry_hash(prev_hash, payload)
 
-    record = AuditLogRecord(
-        seq=seq,
-        trace_id=trace_id,
-        actor_type=actor_type,
-        actor_id=actor_id,
-        action=action,
-        subject=subject,
-        payload=payload,
-        payload_hash=hex_prefixed(payload_hash(payload)),
-        prev_hash=hex_prefixed(prev_hash),
-        entry_hash=hex_prefixed(entry_hash),
-    )
-    await uow.audit_log.add_at_seq(seq, record)
+        record = AuditLogRecord(
+            seq=seq,
+            trace_id=trace_id,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            action=action,
+            subject=subject,
+            payload=payload,
+            payload_hash=hex_prefixed(payload_hash(payload)),
+            prev_hash=hex_prefixed(prev_hash),
+            entry_hash=hex_prefixed(entry_hash),
+        )
+        await uow.audit_log.add_at_seq(seq, record)
+        metrics.chain_length.set(seq)
 
-    if seq % settings.audit_checkpoint_every == 0:
-        await _write_checkpoint(uow, to_seq=seq, anchor=anchor)
+        if seq % settings.audit_checkpoint_every == 0:
+            await _write_checkpoint(uow, to_seq=seq, anchor=anchor)
 
-    return record
+        return record
 
 
 async def _write_checkpoint(

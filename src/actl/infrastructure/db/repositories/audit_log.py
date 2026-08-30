@@ -18,7 +18,7 @@ import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from actl.infrastructure.db.models import AuditLogRow
@@ -182,6 +182,27 @@ class AuditLogRepository:
         await self._session.execute(
             update(AuditLogRow).where(AuditLogRow.seq == seq).values(narration=narration)
         )
+
+    async def get_for_explain(
+        self, *, order_id: str, mandate_id: str | None, quote_id: str | None
+    ) -> list[AuditLogRecord]:
+        """§28 P10 GET /audit/explain/{order_id}: the full causal timeline
+        includes entries written *before* the order existed --
+        budget.reserved (subject has mandate_id, no order_id yet) and
+        quote.issued (subject has quote_id, no order_id or mandate_id) --
+        so this matches on whichever of the three identifiers a given
+        entry's subject actually carries (0008's mandate_id/quote_id
+        expression indexes make each an indexed lookup, same as the
+        pre-existing order_id one)."""
+        conditions = [AuditLogRow.subject["order_id"].astext == order_id]
+        if mandate_id is not None:
+            conditions.append(AuditLogRow.subject["mandate_id"].astext == mandate_id)
+        if quote_id is not None:
+            conditions.append(AuditLogRow.subject["quote_id"].astext == quote_id)
+        result = await self._session.execute(
+            select(AuditLogRow).where(or_(*conditions)).order_by(AuditLogRow.seq)
+        )
+        return [_to_record(row) for row in result.scalars()]
 
     async def get_seq_range_for_order(self, order_id: str) -> tuple[int, int] | None:
         """§14 order.status / receipt.issue: "audit sequence range". Uses

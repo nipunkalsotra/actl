@@ -18,6 +18,7 @@ from actl.application.ports import PaymentProvider
 from actl.config import settings
 from actl.infrastructure.db.uow import UnitOfWork
 from actl.infrastructure.providers.factory import build_payment_provider
+from actl.platform import tracing
 from actl.platform.breaker import CircuitBreaker
 from actl.platform.clock import Clock, SystemClock
 from actl.platform.logging import configure_logging, get_logger
@@ -32,8 +33,9 @@ RECONCILE_POLL_INTERVAL_S = 10.0
 async def _webhook_loop(clock: Clock) -> None:
     while True:
         try:
-            async with UnitOfWork() as uow:
-                processed = await process_unprocessed_webhooks(uow, clock)
+            with tracing.span("worker.webhook_tick"):
+                async with UnitOfWork() as uow:
+                    processed = await process_unprocessed_webhooks(uow, clock)
             if processed:
                 logger.info("worker.webhooks_processed", count=len(processed))
         except Exception:
@@ -44,8 +46,9 @@ async def _webhook_loop(clock: Clock) -> None:
 async def _reconcile_loop(provider: PaymentProvider, clock: Clock, breaker: CircuitBreaker) -> None:
     while True:
         try:
-            async with UnitOfWork() as uow:
-                outcomes = await reconcile_non_terminal_orders(uow, provider, clock, breaker)
+            with tracing.span("worker.reconcile_tick"):
+                async with UnitOfWork() as uow:
+                    outcomes = await reconcile_non_terminal_orders(uow, provider, clock, breaker)
             if outcomes:
                 logger.info("worker.reconciled", count=len(outcomes))
         except Exception:

@@ -35,6 +35,7 @@ from actl.domain.ledger.model import (
 )
 from actl.infrastructure.db.repositories.ledger_entries import LedgerEntryRecord
 from actl.infrastructure.db.uow import UnitOfWork
+from actl.platform import tracing
 from actl.platform.clock import Clock
 from actl.platform.ids import new_id
 
@@ -230,39 +231,49 @@ async def sweep(uow: UnitOfWork, clock: Clock, *, reservation_ttl_s: int) -> lis
     await raise_if_halted(uow)
     cutoff = clock.now() - timedelta(seconds=reservation_ttl_s)
     swept: list[str] = []
-    for ref_id in await uow.ledger_entries.list_reservations_older_than(cutoff):
-        entries = await uow.ledger_entries.list_for_ref_id(ref_id)
-        if _state_of(entries) is not ReservationState.HELD:
-            continue
-        reservation_entry = next(
-            e for e in entries if e.ref_type == "reservation" and e.direction == "debit"
-        )
-        mandate_id = _mandate_id_from_account(reservation_entry.account)
-        amount_minor = reservation_entry.amount_minor
+    with tracing.span("worker.sweep"):
+        for ref_id in await uow.ledger_entries.list_reservations_older_than(cutoff):
+            entries = await uow.ledger_entries.list_for_ref_id(ref_id)
+            if _state_of(entries) is not ReservationState.HELD:
+                continue
+            reservation_entry = next(
+                e for e in entries if e.ref_type == "reservation" and e.direction == "debit"
+            )
+            mandate_id = _mandate_id_from_account(reservation_entry.account)
+            amount_minor = reservation_entry.amount_minor
 
-        if await uow.mandates.get_for_update(mandate_id) is None:
-            continue
-        # Re-check under the lock: another writer may have captured or
-        # released this ref_id since the unlocked scan above.
-        entries = await uow.ledger_entries.list_for_ref_id(ref_id)
-        if _state_of(entries) is not ReservationState.HELD:
-            continue
+            if await uow.mandates.get_for_update(mandate_id) is None:
+                continue
+            # Re-check under the lock: another writer may have captured or
+            # released this ref_id since the unlocked scan above.
+            entries = await uow.ledger_entries.list_for_ref_id(ref_id)
+            if _state_of(entries) is not ReservationState.HELD:
+                continue
 
-        await _add_movements(
-            uow,
-            release_movements(mandate_id, amount_minor),
-            ref_type="expire",
-            ref_id=ref_id,
-            clock=clock,
-        )
-        await append_entry(
-            uow,
-            trace_id=new_id("trc"),
-            actor_type="system",
-            actor_id="sweeper",
-            action=AuditAction.RESERVATION_EXPIRED,
-            subject={"mandate_id": mandate_id, "ref_id": ref_id},
-            payload={"mandate_id": mandate_id, "ref_id": ref_id, "amount_minor": amount_minor},
-        )
-        swept.append(ref_id)
-    return swept
+            # Each expired reservation is its own transaction -- same "one
+            # trace_id per independent worker event" reasoning as
+            # payment_service's webhook/reconciliation ticks.
+            trace_id = new_id("trc")
+            with tracing.transaction_span("worker.sweep_reservation", trace_id, ref_id=ref_id):
+                await _add_movements(
+                    uow,
+                    release_movements(mandate_id, amount_minor),
+                    ref_type="expire",
+                    ref_id=ref_id,
+                    clock=clock,
+                )
+                await append_entry(
+                    uow,
+                    trace_id=trace_id,
+                    actor_type="system",
+                    actor_id="sweeper",
+                    action=AuditAction.RESERVATION_EXPIRED,
+                    subject={"mandate_id": mandate_id, "ref_id": ref_id},
+                    payload={
+                        "mandate_id": mandate_id,
+                        "ref_id": ref_id,
+                        "amount_minor": amount_minor,
+                    },
+                )
+            swept.append(ref_id)
+        return swept

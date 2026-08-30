@@ -19,6 +19,7 @@ from actl.domain.audit.events import AuditAction
 from actl.domain.mandate.state_machine import MandateStatus, TransitionGuardContext, transition
 from actl.infrastructure.db.repositories.orders import TERMINAL_STATUSES
 from actl.infrastructure.db.uow import UnitOfWork
+from actl.platform import metrics, tracing
 from actl.platform.breaker import CircuitBreaker
 from actl.platform.clock import Clock
 
@@ -40,27 +41,29 @@ async def release_reservation_and_mark_compensated(
     callers racing to compensate the same failure) -- `ledger_release` is
     itself idempotent, and the mandate transition is skipped (not
     re-attempted) once the mandate is no longer EXECUTING."""
-    async with UnitOfWork(session_factory) as uow:
-        released = await ledger_release(
-            uow, clock, mandate_id=mandate_id, amount_minor=amount_minor, ref_id=ref_id
-        )
-        await append_entry(
-            uow,
-            trace_id=trace_id,
-            actor_type="system",
-            actor_id=actor_id,
-            action=AuditAction.COMPENSATION_APPLIED,
-            subject={"mandate_id": mandate_id, "ref_id": ref_id},
-            payload={
-                "mandate_id": mandate_id,
-                "ref_id": ref_id,
-                "amount_minor": amount_minor,
-                "reason": reason,
-                "released": released,
-            },
-        )
-        await _mark_compensated(uow, mandate_id)
-        await uow.commit()
+    metrics.compensations_total.labels(compensation="C1").inc()
+    with tracing.span("compensation.C1_release_reservation", ref_id=ref_id, reason=reason):
+        async with UnitOfWork(session_factory) as uow:
+            released = await ledger_release(
+                uow, clock, mandate_id=mandate_id, amount_minor=amount_minor, ref_id=ref_id
+            )
+            await append_entry(
+                uow,
+                trace_id=trace_id,
+                actor_type="system",
+                actor_id=actor_id,
+                action=AuditAction.COMPENSATION_APPLIED,
+                subject={"mandate_id": mandate_id, "ref_id": ref_id},
+                payload={
+                    "mandate_id": mandate_id,
+                    "ref_id": ref_id,
+                    "amount_minor": amount_minor,
+                    "reason": reason,
+                    "released": released,
+                },
+            )
+            await _mark_compensated(uow, mandate_id)
+            await uow.commit()
 
 
 async def _mark_compensated(uow: UnitOfWork, mandate_id: str) -> None:
@@ -92,33 +95,35 @@ async def void_order_and_release_reservation(
     reservation released; mandate EXECUTING -> COMPENSATED. Idempotent:
     an already-terminal order/already-released reservation are each
     left alone."""
-    async with UnitOfWork(session_factory) as uow:
-        order = await uow.orders.get(order_id)
-        if order is not None and order.status not in TERMINAL_STATUSES:
-            await uow.payments.transition_status(
-                order_id, "FAILED", updated_at=clock.now(), decline_reason=reason
+    metrics.compensations_total.labels(compensation="C2").inc()
+    with tracing.span("compensation.C2_void_order", order_id=order_id, reason=reason):
+        async with UnitOfWork(session_factory) as uow:
+            order = await uow.orders.get(order_id)
+            if order is not None and order.status not in TERMINAL_STATUSES:
+                await uow.payments.transition_status(
+                    order_id, "FAILED", updated_at=clock.now(), decline_reason=reason
+                )
+            released = await ledger_release(
+                uow, clock, mandate_id=mandate_id, amount_minor=amount_minor, ref_id=ref_id
             )
-        released = await ledger_release(
-            uow, clock, mandate_id=mandate_id, amount_minor=amount_minor, ref_id=ref_id
-        )
-        await append_entry(
-            uow,
-            trace_id=trace_id,
-            actor_type="system",
-            actor_id=actor_id,
-            action=AuditAction.COMPENSATION_APPLIED,
-            subject={"mandate_id": mandate_id, "order_id": order_id, "ref_id": ref_id},
-            payload={
-                "mandate_id": mandate_id,
-                "order_id": order_id,
-                "ref_id": ref_id,
-                "amount_minor": amount_minor,
-                "reason": reason,
-                "released": released,
-            },
-        )
-        await _mark_compensated(uow, mandate_id)
-        await uow.commit()
+            await append_entry(
+                uow,
+                trace_id=trace_id,
+                actor_type="system",
+                actor_id=actor_id,
+                action=AuditAction.COMPENSATION_APPLIED,
+                subject={"mandate_id": mandate_id, "order_id": order_id, "ref_id": ref_id},
+                payload={
+                    "mandate_id": mandate_id,
+                    "order_id": order_id,
+                    "ref_id": ref_id,
+                    "amount_minor": amount_minor,
+                    "reason": reason,
+                    "released": released,
+                },
+            )
+            await _mark_compensated(uow, mandate_id)
+            await uow.commit()
 
 
 async def refund_and_reverse_settlement(
@@ -141,38 +146,44 @@ async def refund_and_reverse_settlement(
     provider but settlement could not be recorded locally. Idempotent:
     `provider.refund` is keyed by `ref_id` (§15.1 idempotency_key), and
     `ledger_reverse_settlement` is idempotent by `ref_id`."""
-    await _call_with_retry(
-        breaker, lambda: provider.refund(provider_payment_id, amount_minor, f"ik_refund_{ref_id}")
-    )
-
-    async with UnitOfWork(session_factory) as uow:
-        order = await uow.orders.get(order_id)
-        # Unlike void_order_and_release_reservation's guard, CAPTURED is
-        # *not* left alone here -- a refund's whole point is moving an
-        # already-CAPTURED order to FAILED. Only an order already FAILED
-        # (this same compensation, replayed) is a no-op.
-        if order is not None and order.status != "FAILED":
-            await uow.payments.transition_status(
-                order_id, "FAILED", updated_at=clock.now(), decline_reason=reason
+    metrics.compensations_total.labels(compensation="C4_C5").inc()
+    with tracing.span("compensation.C4_C5_refund_and_reverse", order_id=order_id, reason=reason):
+        with tracing.span("provider.refund"):
+            await _call_with_retry(
+                breaker,
+                lambda: provider.refund(
+                    provider_payment_id, amount_minor, f"ik_refund_{ref_id}"
+                ),
             )
-        reversed_ = await ledger_reverse_settlement(
-            uow, clock, mandate_id=mandate_id, amount_minor=amount_minor, ref_id=ref_id
-        )
-        await append_entry(
-            uow,
-            trace_id=trace_id,
-            actor_type="system",
-            actor_id=actor_id,
-            action=AuditAction.COMPENSATION_APPLIED,
-            subject={"mandate_id": mandate_id, "order_id": order_id, "ref_id": ref_id},
-            payload={
-                "mandate_id": mandate_id,
-                "order_id": order_id,
-                "ref_id": ref_id,
-                "amount_minor": amount_minor,
-                "reason": reason,
-                "reversed": reversed_,
-            },
-        )
-        await _mark_compensated(uow, mandate_id)
-        await uow.commit()
+
+        async with UnitOfWork(session_factory) as uow:
+            order = await uow.orders.get(order_id)
+            # Unlike void_order_and_release_reservation's guard, CAPTURED is
+            # *not* left alone here -- a refund's whole point is moving an
+            # already-CAPTURED order to FAILED. Only an order already FAILED
+            # (this same compensation, replayed) is a no-op.
+            if order is not None and order.status != "FAILED":
+                await uow.payments.transition_status(
+                    order_id, "FAILED", updated_at=clock.now(), decline_reason=reason
+                )
+            reversed_ = await ledger_reverse_settlement(
+                uow, clock, mandate_id=mandate_id, amount_minor=amount_minor, ref_id=ref_id
+            )
+            await append_entry(
+                uow,
+                trace_id=trace_id,
+                actor_type="system",
+                actor_id=actor_id,
+                action=AuditAction.COMPENSATION_APPLIED,
+                subject={"mandate_id": mandate_id, "order_id": order_id, "ref_id": ref_id},
+                payload={
+                    "mandate_id": mandate_id,
+                    "order_id": order_id,
+                    "ref_id": ref_id,
+                    "amount_minor": amount_minor,
+                    "reason": reason,
+                    "reversed": reversed_,
+                },
+            )
+            await _mark_compensated(uow, mandate_id)
+            await uow.commit()
