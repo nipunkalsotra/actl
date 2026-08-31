@@ -286,6 +286,13 @@ class AuditCheckpointRow(Base):
     merkle_root: Mapped[str] = mapped_column(Text, nullable=False)
     anchor_tx: Mapped[str | None] = mapped_column(Text, nullable=True)
     anchored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # §28 P11: populated only by the opt-in Monad anchor worker loop;
+    # 'unanchored' for every row when ANCHOR_PROVIDER=noop (default).
+    anchor_status: Mapped[str] = mapped_column(Text, nullable=False, server_default="unanchored")
+    anchor_chain_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    anchor_contract_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    anchor_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    anchor_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
 
         DateTime(timezone=True), nullable=False, server_default=func.now()

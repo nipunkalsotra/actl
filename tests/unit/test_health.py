@@ -18,4 +18,4 @@ def test_readyz_reports_db_redis_and_migration() -> None:
     assert body["status"] == "ready"
     assert body["db"] == "ok"
     assert body["redis"] == "ok"
-    assert body["migration"] == "0008"
+    assert body["migration"] == "0009"

@@ -65,6 +65,13 @@ reconciliation_lag_seconds = Gauge(
     registry=REGISTRY,
 )
 
+anchor_submissions_total = Counter(
+    "actl_anchor_submissions_total",
+    "§28 P11 Monad checkpoint anchor attempts, by outcome",
+    ["outcome"],  # anchored | already_anchored | conflict | transient_failure
+    registry=REGISTRY,
+)
+
 http_requests_total = Counter(
     "actl_http_requests_total",
     "HTTP requests, by route template, method, and status code",

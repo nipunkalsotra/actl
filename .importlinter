@@ -16,6 +16,8 @@ forbidden_modules =
     redis
     razorpay
     groq
+    web3
+    eth_account
 
 [importlinter:contract:2]
 name = Layers point inward
@@ -68,3 +70,19 @@ source_modules =
     actl.application
 forbidden_modules =
     groq
+
+[importlinter:contract:6]
+# §28 P11: MonadAnchor is deliberately never wired into application.
+# audit_service's synchronous `anchor=` parameter (that would block audit
+# appends on Monad's availability, see docs/adr/0016) -- real anchoring
+# runs from actl.worker's own async loop instead, which builds the
+# adapter via infrastructure.anchor.factory directly, the same
+# composition-root pattern contract 4 already establishes for the
+# Razorpay adapter.
+name = Only the worker (or the anchor factory) may import the Monad adapter
+type = protected
+protected_modules =
+    actl.infrastructure.anchor.monad_testnet
+allowed_importers =
+    actl.worker
+    actl.infrastructure.anchor.factory

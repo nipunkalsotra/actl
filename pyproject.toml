@@ -18,6 +18,11 @@ dependencies = [
     "opentelemetry-api>=1.27",
     "opentelemetry-sdk>=1.27",
     "prometheus-client>=0.21",
+    # §28 P11: Monad Testnet anchoring only (infrastructure/anchor/
+    # monad_testnet.py) -- keystore decryption, tx signing, contract
+    # encode/decode, receipt polling. Standard EVM tooling (same library
+    # Foundry/Monad's own docs point developers at), not hand-rolled.
+    "web3>=7.6",
 ]
 
 [dependency-groups]
@@ -45,6 +50,10 @@ packages = ["src/actl"]
 target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
+# §28 P11: chain/ is an isolated Foundry project (Solidity + vendored
+# forge-std, chain/lib/forge-std/scripts/vm.py included) -- not part of
+# the actl Python package, not this project's code to lint.
+extend-exclude = ["chain"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "C4", "SIM", "RUF"]

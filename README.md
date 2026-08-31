@@ -114,6 +114,21 @@ manifest before any chain logic runs; a consistently-forged file (data
 and manifest hash both changed) is still caught by the entry-hash chain,
 Merkle root, or head-hash check.
 
+## Optional: Monad Testnet anchoring
+
+`NoopAnchor` is the default (byte-for-byte the P3 behaviour) — nothing
+below runs unless you explicitly set `ANCHOR_PROVIDER=monad`. When
+enabled, an async worker loop publishes checkpoint Merkle roots — and
+only the roots, never business data — to a Monad Testnet contract, as
+external timestamping evidence for the offline-verifiable hash chain
+above. Fully optional, fully asynchronous, never on the money/audit-append
+path: a Monad outage can never block a purchase, ledger action, or audit
+append. Full docs, deployment steps, and failure/retry behaviour:
+[`docs/monad-testnet.md`](docs/monad-testnet.md); design rationale:
+[ADR 0016](docs/adr/0016-p11-monad-anchoring-decisions.md); a real,
+deployed-contract proof on live Testnet:
+[live Testnet proof](docs/monad-testnet.md#live-monad-testnet-proof).
+
 ## Observability
 
 ```
@@ -155,12 +170,14 @@ curl -s -H "Authorization: Bearer $READ_TOKEN" localhost:8000/audit/explain/{ord
 - **Frontend is out of scope** by design (§01 SCOPE) — this is a
   backend/domain/infrastructure build; a reviewer interacts with it via
   `curl`/the CLI, not a UI.
-- **No outbox relay, Merkle anchor writer, or DLQ drainer** are built —
-  audit checkpointing happens synchronously in the same transaction as
-  the entry that crosses a checkpoint boundary, which is what makes the
+- **No generic outbox relay or DLQ drainer** are built — audit
+  checkpointing happens synchronously in the same transaction as the
+  entry that crosses a checkpoint boundary, which is what makes the
   "persist atomically" guarantee trivially true rather than something a
-  second process has to get right; anchoring is a documented no-op
-  stretch goal behind the `Anchor` port.
+  second process has to get right. Optional Monad Testnet anchoring (§28
+  P11) is its own async worker loop using `audit_checkpoints` itself as
+  the outbox — see [Optional: Monad Testnet anchoring](#optional-monad-testnet-anchoring)
+  below; `NoopAnchor` (the `Anchor` port's default) remains a true no-op.
 - **`catalog.queried` audit entries carry no mandate/order/quote
   linkage** in their subject (a buyer can browse before choosing
   anything), so `GET /audit/explain/{order_id}` cannot correlate a
@@ -223,6 +240,10 @@ green:
   audit-trace-id equality, Prometheus metrics, `GET /audit/explain/
   {order_id}`, secret-redaction proof, the completed offline audit
   bundle exporter, and this reviewer path.
+- **P11** Optional Monad Testnet anchoring — an owner-controlled
+  `AuditCheckpointAnchor` contract, a keystore-based deployment flow, an
+  async/idempotent/non-blocking worker loop, and the opt-in on-chain
+  verifier — `NoopAnchor` remains the default, byte-for-byte unchanged.
 
 See `docs/architecture.md` §28 for the full phase roadmap and exit
 criteria, and [`docs/runbook.md`](docs/runbook.md) for the detection,

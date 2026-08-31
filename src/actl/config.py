@@ -65,6 +65,19 @@ class Settings(BaseSettings):
     anchor_rpc_url: str = ""
     agent_signing_alg: str = "ed25519"
 
+    # ---- monad testnet anchoring (optional, §28 P11) ---------------------
+    # §16.1's stretch goal, finally implemented: publish audit-checkpoint
+    # Merkle roots -- and only the roots -- to a Monad Testnet contract.
+    # "noop" (default) is exactly today's P3 behaviour, byte-for-byte;
+    # nothing below is read unless anchor_provider="monad" is set
+    # explicitly. See docs/monad-testnet.md and docs/adr/0016.
+    anchor_provider: str = "noop"  # noop | monad
+    monad_rpc_url: str = "https://testnet-rpc.monad.xyz"
+    monad_chain_id: int = 10143
+    monad_contract_address: str = ""
+    monad_keystore_path: str = ""
+    monad_keystore_password: str = ""
+
     # ---- agent commerce protocol (§13, §14) ------------------------------------
     # HMAC-SHA256 is §14.1's documented development fallback; this is a
     # 100%-test-mode build, so it is what's actually wired up for

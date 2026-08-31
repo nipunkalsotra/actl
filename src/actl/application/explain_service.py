@@ -37,6 +37,13 @@ from actl.application.payment_service import extract_payment_entity
 from actl.domain.audit.events import AuditAction
 from actl.infrastructure.db.uow import UnitOfWork
 
+# §28 P11: testnet.monadscan.com is Monad's own documented Testnet
+# explorer (docs/monad-testnet.md has the full source list) -- the only
+# chain this build ever anchors to (infrastructure.anchor.factory refuses
+# any other MONAD_CHAIN_ID at construction), so no further gating on
+# chain_id is needed before building this URL.
+_MONAD_TESTNET_EXPLORER_TX_URL = "https://testnet.monadscan.com/tx/{tx_hash}"
+
 TimelineItemType = Literal["fact", "decision", "provider_event", "compensation"]
 
 _ITEM_TYPE_BY_ACTION: dict[str, TimelineItemType] = {
@@ -71,10 +78,29 @@ class TimelineItem:
 
 
 @dataclass(frozen=True)
+class AnchorInfo:
+    """§28 P11 instruction 5: anchor status/contract address/tx hash/chain
+    id/explorer URL for the checkpoint covering this order's latest audit
+    entry. `status="unanchored"` covers both "ANCHOR_PROVIDER=noop" (the
+    default -- every checkpoint stays unanchored forever) and "monad
+    worker just hasn't gotten to it yet"; a typed backend response only,
+    the trust panel that renders it is out of scope for this build."""
+
+    status: str  # unanchored | anchored | conflict
+    checkpoint_from_seq: int
+    checkpoint_to_seq: int
+    chain_id: int | None = None
+    contract_address: str | None = None
+    tx_hash: str | None = None
+    explorer_url: str | None = None
+
+
+@dataclass(frozen=True)
 class ExplainResult:
     order_id: str
     terminal_status: str
     timeline: list[TimelineItem]
+    anchor: AnchorInfo | None = None
 
 
 class OrderNotFoundForExplain(Exception):
@@ -155,4 +181,34 @@ async def explain_order(uow: UnitOfWork, order_id: str) -> ExplainResult:
             )
 
     timeline.sort(key=lambda item: (item.ts is None, item.ts, item.seq or 0))
-    return ExplainResult(order_id=order_id, terminal_status=order.status, timeline=timeline)
+
+    seqs = [item.seq for item in timeline if item.seq is not None]
+    anchor = await _anchor_info_for(uow, max(seqs)) if seqs else None
+
+    return ExplainResult(
+        order_id=order_id, terminal_status=order.status, timeline=timeline, anchor=anchor
+    )
+
+
+async def _anchor_info_for(uow: UnitOfWork, seq: int) -> AnchorInfo | None:
+    """§28 P11: the checkpoint whose [from_seq, to_seq] segment covers this
+    order's latest audit entry, if that segment has been checkpointed yet
+    (still-open tail segments -- fewer than AUDIT_CHECKPOINT_EVERY entries
+    so far -- have no checkpoint at all, so this returns None)."""
+    checkpoint = await uow.audit_checkpoints.get_covering_seq(seq)
+    if checkpoint is None:
+        return None
+
+    explorer_url = None
+    if checkpoint.anchor_status == "anchored" and checkpoint.anchor_tx:
+        explorer_url = _MONAD_TESTNET_EXPLORER_TX_URL.format(tx_hash=checkpoint.anchor_tx)
+
+    return AnchorInfo(
+        status=checkpoint.anchor_status,
+        checkpoint_from_seq=checkpoint.from_seq,
+        checkpoint_to_seq=checkpoint.to_seq,
+        chain_id=checkpoint.anchor_chain_id,
+        contract_address=checkpoint.anchor_contract_address,
+        tx_hash=checkpoint.anchor_tx,
+        explorer_url=explorer_url,
+    )

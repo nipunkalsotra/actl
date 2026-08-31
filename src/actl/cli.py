@@ -15,7 +15,11 @@ import sys
 from pathlib import Path
 
 from actl.application import ledger_service
-from actl.application.audit_service import ChainVerificationResult, verify_chain_and_halt_on_failure
+from actl.application.audit_service import (
+    DEFAULT_CHAIN_ID,
+    ChainVerificationResult,
+    verify_chain_and_halt_on_failure,
+)
 from actl.application.demo import SCENARIOS, DemoResult, UnknownScenario, run_scenario
 from actl.application.growth.events import ARM_UPSELL
 from actl.application.growth.metrics import ArmMetrics, GrowthMetrics, compute_growth_metrics
@@ -28,7 +32,9 @@ from actl.domain.mandate.models import Mandate
 from actl.domain.policy.engine import evaluate
 from actl.domain.policy.reason_codes import ReasonCode
 from actl.domain.policy.rules import PolicyContext, PurchaseIntent
+from actl.infrastructure.anchor.factory import build_anchor_worker
 from actl.infrastructure.db.engine import get_session_factory
+from actl.infrastructure.db.repositories.audit_checkpoints import AuditCheckpointRecord
 from actl.infrastructure.db.uow import UnitOfWork
 from actl.infrastructure.providers.factory import build_payment_provider
 from actl.infrastructure.providers.simulator.adapter import SimulatorAdapter
@@ -109,6 +115,56 @@ def _verify_chain(from_seq: int, to_seq: int) -> int:
     print(
         f"CHAIN VALID   head={result.head_entry_hash}   "
         f"entries={result.entries_verified}   checkpoints={len(result.checkpoints_matched)}"
+    )
+    return 0
+
+
+def _verify_anchor(to_seq: int) -> int:
+    """§28 P11 instruction 5: opt-in Testnet verifier -- queries the
+    deployed AuditCheckpointAnchor contract and proves its stored root
+    matches the local checkpoint's root. Never runs implicitly: requires
+    real ANCHOR_PROVIDER=monad configuration (RPC URL, contract address,
+    keystore) in .env, same fail-closed guard `build_anchor_worker` uses
+    for the worker's own anchor loop -- see docs/monad-testnet.md."""
+
+    async def _run() -> AuditCheckpointRecord | None:
+        async with UnitOfWork() as uow:
+            return await uow.audit_checkpoints.get_by_to_seq(to_seq)
+
+    checkpoint = asyncio.run(_run())
+    if checkpoint is None:
+        print(f"FAIL: no local checkpoint with to_seq={to_seq}")
+        return 1
+
+    client = build_anchor_worker(settings, audit_chain_id=DEFAULT_CHAIN_ID)
+    if client is None:
+        print(
+            "FAIL: ANCHOR_PROVIDER=noop (default) -- set ANCHOR_PROVIDER=monad and the "
+            "MONAD_* variables in .env to run the Testnet verifier. See docs/monad-testnet.md."
+        )
+        return 1
+
+    on_chain_root, anchored_at = client.read_checkpoint(
+        start_seq=checkpoint.from_seq, end_seq=checkpoint.to_seq
+    )
+    local_root = checkpoint.merkle_root.removeprefix("sha256:")
+    on_chain_root_stripped = (on_chain_root or "").removeprefix("0x")
+
+    if on_chain_root is None:
+        print(
+            f"FAIL: checkpoint {checkpoint.from_seq}..{checkpoint.to_seq} is not anchored "
+            "on-chain yet"
+        )
+        return 1
+    if on_chain_root_stripped != local_root:
+        print(f"FAIL: root mismatch for checkpoint {checkpoint.from_seq}..{checkpoint.to_seq}")
+        print(f"  local:    sha256:{local_root}")
+        print(f"  on-chain: 0x{on_chain_root_stripped}")
+        return 1
+
+    print(
+        f"VERIFIED  checkpoint {checkpoint.from_seq}..{checkpoint.to_seq}  "
+        f"root=sha256:{local_root}  anchored_at={anchored_at}  contract={client.contract_address}"
     )
     return 0
 
@@ -318,6 +374,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("chain-head", help="print the current audit chain tail")
 
+    verify_anchor_parser = subparsers.add_parser(
+        "verify-anchor",
+        help="opt-in: query the deployed Monad contract and compare against the local "
+        "checkpoint root (§28 P11, requires ANCHOR_PROVIDER=monad in .env)",
+    )
+    verify_anchor_parser.add_argument("--to", dest="to_seq", type=int, required=True)
+
     provider_smoke_parser = subparsers.add_parser(
         "provider-smoke", help="create one order via the configured PaymentProvider (§28 P5)"
     )
@@ -356,6 +419,8 @@ def main() -> None:
         sys.exit(_verify_chain(args.from_seq, args.to_seq))
     if args.command == "chain-head":
         sys.exit(_chain_head())
+    if args.command == "verify-anchor":
+        sys.exit(_verify_anchor(args.to_seq))
     if args.command == "provider-smoke":
         sys.exit(_provider_smoke(args.amount))
     if args.command == "replay-webhook":

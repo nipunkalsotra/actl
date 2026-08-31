@@ -1,0 +1,21 @@
+# §28 P11: isolated Foundry project for AuditCheckpointAnchor -- Monad
+# Testnet only. Chain id / RPC confirmed against official Monad docs
+# (docs.monad.xyz/developer-essentials/testnet, 2026-08-31); see
+# docs/monad-testnet.md for the full source list.
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib"]
+# "network = monad" (Foundry >=1.8, enables Monad-specific execution rules
+# for compilation/simulation per the official Foundry guide) is omitted:
+# this environment's forge is 1.7.1. Upgrade via `foundryup` and add
+# `network = "monad"` back for the full Monad-aware toolchain; plain solc
+# compilation/testing below is unaffected either way.
+eth-rpc-url = "https://testnet-rpc.monad.xyz"
+chain_id = 10143
+solc_version = "0.8.24"
+
+[fmt]
+line_length = 100

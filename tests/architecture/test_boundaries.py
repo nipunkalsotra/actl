@@ -133,6 +133,41 @@ def test_conversation_module_cannot_reach_the_gate_or_a_payment_provider() -> No
     assert offenders == [], f"U1/U2/U3 must never reach the gate or a payment provider: {offenders}"
 
 
+MONAD_MODULE = "actl.infrastructure.anchor.monad_testnet"
+MONAD_ALLOWED_IMPORTERS = frozenset({"actl.worker", "actl.infrastructure.anchor.factory"})
+
+
+def test_only_worker_or_anchor_factory_imports_the_monad_adapter() -> None:
+    """§28 P11: MonadAnchor must never be reachable from application.
+    audit_service's synchronous checkpoint path -- that would tie audit-
+    append latency to Monad's availability, which the non-negotiable
+    rules forbid. The executable, self-contained proof of .importlinter
+    contract 6, mirroring this file's existing Razorpay-adapter proof."""
+    offenders = []
+    for path in SRC_ROOT.rglob("*.py"):
+        module = _module_name(path)
+        if module in MONAD_ALLOWED_IMPORTERS or module.startswith(MONAD_MODULE):
+            continue
+        if _imports_module(path, MONAD_MODULE):
+            offenders.append(module)
+    assert offenders == [], f"only the worker/anchor factory may import MonadAnchor: {offenders}"
+
+
+def test_application_layer_never_imports_the_monad_adapter_or_web3() -> None:
+    """§28 P11: application.audit_service (and every other application
+    module) depends only on application.ports.Anchor, never on the
+    concrete Monad adapter or the web3/eth_account libraries directly --
+    all blockchain code stays in infrastructure (§28 P11 instruction 3)."""
+    offenders = [
+        _module_name(p)
+        for p in _module_source_files("actl.application")
+        if _imports_module(p, MONAD_MODULE)
+        or _imports_module(p, "web3")
+        or _imports_module(p, "eth_account")
+    ]
+    assert offenders == [], f"application code must never import web3/MonadAnchor: {offenders}"
+
+
 def test_growth_module_never_imports_groq_or_razorpay() -> None:
     """§28 P8 instruction 9: "must not contact Razorpay or Groq." The
     growth simulator is explicitly typed against `SimulatorAdapter`

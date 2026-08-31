@@ -43,9 +43,27 @@ async def explain(
             status_code=404, detail={"reason_code": "ORDER_NOT_FOUND", "order_id": order_id}
         ) from None
 
+    anchor = result.anchor
     return {
         "order_id": result.order_id,
         "terminal_outcome": {"status": result.terminal_status},
+        # §28 P11: None when the order's latest audit entry hasn't crossed
+        # a checkpoint boundary yet; otherwise the covering checkpoint's
+        # anchor state -- "unanchored" for every checkpoint whenever
+        # ANCHOR_PROVIDER=noop (default), never a live Monad lookup.
+        "anchor": None
+        if anchor is None
+        else {
+            "status": anchor.status,
+            "checkpoint_range": {
+                "from_seq": anchor.checkpoint_from_seq,
+                "to_seq": anchor.checkpoint_to_seq,
+            },
+            "chain_id": anchor.chain_id,
+            "contract_address": anchor.contract_address,
+            "tx_hash": anchor.tx_hash,
+            "explorer_url": anchor.explorer_url,
+        },
         "timeline": [
             {
                 "seq": item.seq,
