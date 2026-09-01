@@ -179,6 +179,14 @@ async def create_quote(
         if item.available_units <= 0:
             raise SkuUnavailable(f"{sku} has no available units", details={"sku": sku})
 
+        # Pin the *global* epoch, not this item's own last-mutated marker --
+        # G5 (gate.py) compares against uow.catalog.current_version(), which
+        # advances on ANY item's mutation. An item that's never been
+        # individually mutated keeps item.version frozen at its seed value
+        # forever, so pinning that would make it spuriously, permanently
+        # STALE_PRICE the instant any *other* item is ever mutated.
+        current_version = await uow.catalog.current_version()
+
         total_minor = item.unit_price_minor * nights
         draft = Quote(
             quote_id=new_id("qte"),
@@ -187,7 +195,7 @@ async def create_quote(
             unit_price_minor=item.unit_price_minor,
             nights=nights,
             total_minor=total_minor,
-            catalog_version=item.version,
+            catalog_version=current_version,
             refundable=item.refundable,
             expires_at=clock.now() + timedelta(seconds=settings.quote_ttl_s),
         )

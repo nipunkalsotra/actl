@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+  /* Bright premium travel-commerce palette -- pale sky-blue/white ground,
+     deep navy text, ocean-blue primary actions, warm coral CTA, emerald
+     success/trust states. Never a dark fintech-dashboard look. */
+  --color-sky-50: #eef6fd;
+  --color-sky-100: #e1f0fc;
+
+  --color-navy-900: #0e2a44;
+  --color-navy-700: #1c3f5f;
+  --color-navy-500: #4c6884;
+
+  --color-ocean-600: #1c6fd9;
+  --color-ocean-500: #2c82ee;
+  --color-ocean-100: #dceafd;
+
+  --color-coral-600: #e35431;
+  --color-coral-500: #f2653e;
+  --color-coral-100: #fde3da;
+
+  --color-emerald-600: #0e9f6e;
+  --color-emerald-500: #16b981;
+  --color-emerald-100: #d9f7ec;
+
+  --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+
+  --shadow-card: 0 1px 2px rgba(14, 42, 68, 0.04), 0 8px 24px rgba(14, 42, 68, 0.08);
+  --shadow-float: 0 12px 32px rgba(14, 42, 68, 0.18);
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-sky-50);
+    color: var(--color-navy-900);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

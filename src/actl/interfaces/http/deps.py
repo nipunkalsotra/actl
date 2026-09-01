@@ -18,7 +18,7 @@ from fastapi import Request
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from actl.application.ports import PaymentProvider
+from actl.application.ports import LLMClient, PaymentProvider
 from actl.infrastructure.cache.nonce import NonceCache
 from actl.infrastructure.db.engine import get_session_factory as _get_session_factory
 from actl.infrastructure.db.uow import UnitOfWork
@@ -39,6 +39,10 @@ def get_clock() -> Clock:
 
 def get_payment_provider(request: Request) -> PaymentProvider:
     return cast(PaymentProvider, request.app.state.payment_provider)
+
+
+def get_llm_client(request: Request) -> LLMClient:
+    return cast(LLMClient, request.app.state.llm_client)
 
 
 def get_redis(request: Request) -> Redis:

@@ -10,14 +10,16 @@ from typing import Any
 
 import redis.asyncio as redis
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from actl.config import settings
+from actl.infrastructure.llm.factory import build_llm_client
 from actl.infrastructure.providers.factory import build_payment_provider
 from actl.interfaces.agent import routes as agent_routes
-from actl.interfaces.http.routers import admin, audit, catalog, growth, well_known
+from actl.interfaces.http.routers import admin, audit, buyer, catalog, growth, merchant, well_known
 from actl.interfaces.webhooks import razorpay as razorpay_webhooks
 from actl.platform import metrics
 from actl.platform.breaker import CircuitBreaker
@@ -41,6 +43,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # worker.py's own breaker lifetime) -- its consecutive-failure state
     # is meaningless if rebuilt fresh on every call.
     app.state.breaker = CircuitBreaker(name="razorpay", clock=SystemClock())
+    # §28 P12: same composition-root pattern as payment_provider above --
+    # built once here (outside the import-linter contract's forbidden
+    # source_modules for reaching the groq SDK directly) and handed to
+    # routers via request.app.state; falls back to NullLLMClient/
+    # ReplayLLMClient per LLM_ENABLED/DEMO_REPLAY exactly like the CLI/worker.
+    app.state.llm_breaker = CircuitBreaker(name="groq", clock=SystemClock())
+    app.state.llm_client = build_llm_client(
+        settings,
+        redis_client=app.state.redis_client,
+        breaker=app.state.llm_breaker,
+        clock=SystemClock(),
+    )
     logger.info("app.startup", app_env=settings.app_env)
     try:
         yield
@@ -61,6 +75,28 @@ app.include_router(growth.router)
 app.include_router(well_known.router)
 app.include_router(razorpay_webhooks.router)
 app.include_router(agent_routes.router)
+app.include_router(buyer.router)
+app.include_router(merchant.router)
+
+# §28 P12 buyer frontend: local Vite dev server only, cross-origin to this
+# API. No wildcard, no regex -- an explicit, small allow-list of exactly
+# the two equivalent local dev origins `web/vite.config.ts`'s own
+# `strictPort: true` guarantees Vite will actually bind to (it fails to
+# start rather than silently drifting to another port, which is what
+# previously caused browser preflights to reach this middleware with an
+# origin outside this list -- a 400 there is CORSMiddleware working
+# correctly, not a bug to work around by widening the list).
+# A real production frontend origin, when one exists, belongs here as an
+# explicit addition to this same list -- never a wildcard/regex stand-in.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.middleware("http")

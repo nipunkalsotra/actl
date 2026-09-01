@@ -3,6 +3,7 @@ DecisionRecord model (actl.domain.policy.decision)."""
 
 from __future__ import annotations
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from actl.domain.policy.decision import DecisionRecord, RuleTraceEntry
@@ -48,3 +49,13 @@ class DecisionRepository:
             evaluated_at=row.evaluated_at,
             ttl_s=row.ttl_s,
         )
+
+    async def count_denied(self) -> int:
+        """§28 P12 merchant "Protected offers blocked" KPI: every policy
+        decision whose verdict was not ALLOW -- a real purchase attempt the
+        Money Action Gate actually stopped, protecting the mandate's own
+        budget/policy bounds. Read-only aggregate, no new write path."""
+        result = await self._session.execute(
+            select(func.count()).select_from(DecisionRow).where(DecisionRow.verdict != "ALLOW")
+        )
+        return result.scalar_one()

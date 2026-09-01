@@ -116,3 +116,13 @@ class OrderRepository:
             )
         )
         return [order_row_to_record(row) for row in result.scalars()]
+
+    async def list_recent(self, limit: int = 50) -> list[OrderRecord]:
+        """§28 P12 merchant live-orders view: the newest orders, read-only.
+        No filtering by status here -- the caller (interfaces layer) decides
+        what to show; this is just "most recent N", the same shape any
+        operational order list needs."""
+        result = await self._session.execute(
+            select(OrderRow).order_by(OrderRow.created_at.desc()).limit(limit)
+        )
+        return [order_row_to_record(row) for row in result.scalars()]
