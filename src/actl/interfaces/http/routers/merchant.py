@@ -185,6 +185,9 @@ async def get_trust_summary(uow: UnitOfWork = Depends(get_uow)) -> dict[str, Any
 # ---------------------------------------------------------------------------
 
 
+_SAFE_DEMO_APP_ENVS = frozenset({"local", "ci"})
+
+
 def _require_safe_demo_environment() -> None:
     """Reject rather than silently no-op or (worse) actually run against a
     real deployment: Demo Lab writes real deterministic-id rows into
@@ -192,12 +195,19 @@ def _require_safe_demo_environment() -> None:
     reachable unless this process is *also* already configured
     local/simulator-safe -- the same discipline `PaymentProvider`
     (§28 P5) and `LLMClient` (§28 P8) fail-closed on for their own real
-    vs. simulated/fallback split."""
-    if settings.app_env != "local" or settings.payment_provider != "simulator":
+    vs. simulated/fallback split.
+
+    `app_env`'s three documented values (.env: `local | ci | demo`) split
+    into two ephemeral, developer/test-only environments -- a dev machine
+    and a CI runner's throwaway testcontainers Postgres/Redis, both safe
+    -- versus `demo`, a persistent, judge-facing deployment that is not
+    ephemeral and stays excluded here."""
+    if settings.app_env not in _SAFE_DEMO_APP_ENVS or settings.payment_provider != "simulator":
         raise HTTPException(
             status_code=403,
             detail=(
-                "Demo Lab requires APP_ENV=local and PAYMENT_PROVIDER=simulator; "
+                "Demo Lab requires APP_ENV in {'local', 'ci'} and "
+                "PAYMENT_PROVIDER=simulator; "
                 f"this process is app_env={settings.app_env!r} "
                 f"payment_provider={settings.payment_provider!r}."
             ),

@@ -237,12 +237,25 @@ def test_demo_lab_rejects_when_payment_provider_is_not_simulator(
     assert "simulator" in resp.json()["detail"]
 
 
-def test_demo_lab_rejects_when_app_env_is_not_local(
+def test_demo_lab_rejects_persistent_demo_app_env(
     merchant_client: MerchantClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(settings, "app_env", "ci")
+    # "demo" (.env: `local | ci | demo`) denotes a persistent, judge-facing
+    # deployment, not an ephemeral dev/CI database -- it must stay rejected.
+    monkeypatch.setattr(settings, "app_env", "demo")
     resp = merchant_client.http.post("/merchant/v1/demo/stale-price")
     assert resp.status_code == 403
+
+
+def test_demo_lab_allows_ci_app_env(
+    merchant_client: MerchantClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Regression guard: CI's own workflow runs this whole suite with
+    # APP_ENV=ci (a throwaway testcontainers Postgres/Redis, exactly as
+    # safe as a local dev box) -- Demo Lab must not 403 in CI.
+    monkeypatch.setattr(settings, "app_env", "ci")
+    resp = merchant_client.http.post("/merchant/v1/demo/verify-chain")
+    assert resp.status_code == 200
 
 
 def test_demo_lab_stale_price_can_run_twice_without_id_collision(
