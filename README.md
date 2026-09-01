@@ -45,6 +45,52 @@ see the script for the literal commands if you'd rather run them by hand
 against your own already-cloned checkout (skip the `git clone` step in
 that case).
 
+## Local development (buyer + merchant UI)
+
+One command starts the real backend (Postgres + Redis, migrated and
+seeded) and the buyer + merchant Vite frontend together, with safe local
+defaults (`PAYMENT_PROVIDER=simulator`, `LLM_ENABLED=false`,
+`ANCHOR_PROVIDER=noop`) — no Docker/migration/seed/port juggling or
+multiple terminals to manage by hand:
+
+```
+./start.sh
+```
+
+```
+ACTL is ready
+Buyer:    http://localhost:5173/
+Merchant: http://localhost:5173/merchant
+Backend:  http://127.0.0.1:8000/docs
+Logs:     ./logs.sh
+Stop:     ./stop.sh
+```
+
+- `./status.sh` — compact table: Postgres/Redis health, backend/frontend
+  PID + running state + URL health, any conflicting port owner.
+- `./logs.sh` (or `./logs.sh backend` / `./logs.sh frontend`) — tails the
+  running service(s)' logs.
+- `./stop.sh` — stops only the backend/frontend processes this launcher
+  started (tracked in the gitignored `.run/`), leaving Postgres/Redis
+  running; `./stop.sh --down` also stops those.
+
+Safe by construction: if root `.env` is missing, `start.sh` generates one
+from `.env.example` with the three fields above forced and `chmod 600`
+— it never invents, reads, prints, or copies a real credential, and
+never touches an `.env` you already have. Re-running `./start.sh` is
+idempotent — it reuses an already-running ACTL backend/frontend/Compose
+stack rather than restarting it, and refuses (without ever killing
+anything) if port 8000/5173 is already held by something it didn't
+start itself.
+
+**`./start.sh` vs. `scripts/clone_to_demo.sh`** — different jobs:
+`./start.sh` is for interactive local development against this checkout,
+buyer and merchant UI included, and leaves the stack running afterwards.
+`scripts/clone_to_demo.sh` is an isolated reviewer/CI-style verification
+run: fresh temporary clone, its own disposable Compose project, no
+frontend, torn down automatically at the end — see [Reviewer
+path](#reviewer-path) above.
+
 ## Setup
 
 Requirements: Docker, `uv`. No `.env` needed for the reviewer path above —
