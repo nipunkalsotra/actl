@@ -507,7 +507,10 @@ _RUNNERS = {
 
 
 async def run_scenario(
-    scenario: str, session_factory: async_sessionmaker[AsyncSession]
+    scenario: str,
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    run_id: str | None = None,
 ) -> DemoResult:
     """The `seq_range` reported (and verified) here is the scenario's own
     contiguous span of the chain -- `start_seq+1..end_seq`, captured around
@@ -518,10 +521,21 @@ async def run_scenario(
     compensation evidence (§22's correlation model, matching a real,
     separate checkout callback), so scoping by trace_id alone would miss
     exactly the settlement/compensation entries a demo scenario exists to
-    show."""
+    show.
+
+    `run_id` is optional and additive: omitted (the CLI/golden-trace path,
+    unchanged), the seed is exactly `actl-demo:<scenario>` as before --
+    byte-identical ids every run, which is the whole point for a committed
+    golden fixture. A caller that instead needs to run the *same* scenario
+    repeatedly against a long-lived, already-populated database (§28 P12's
+    merchant Demo Lab, where a judge may click "Stale price" more than
+    once) supplies a fresh `run_id` per invocation so each run gets its own
+    deterministic-but-unique id sequence instead of colliding on the
+    previous run's now-persisted rows."""
     if scenario not in _RUNNERS:
         raise UnknownScenario(scenario)
-    seed_deterministic_ids(f"actl-demo:{scenario}")
+    seed = f"actl-demo:{scenario}" if run_id is None else f"actl-demo:{scenario}:{run_id}"
+    seed_deterministic_ids(seed)
     try:
         async with UnitOfWork(session_factory) as uow:
             start_tail = await uow.audit_log.get_tail()

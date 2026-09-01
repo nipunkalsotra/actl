@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from actl.application.explain_service import OrderNotFoundForExplain, explain_order
+from actl.application.explain_service import ExplainResult, OrderNotFoundForExplain, explain_order
 from actl.config import settings
 from actl.infrastructure.db.uow import UnitOfWork
 from actl.interfaces.http.deps import get_uow
@@ -26,23 +26,11 @@ def _require_read_token(request: Request) -> None:
         raise HTTPException(status_code=401, detail="invalid or missing read token")
 
 
-@router.get("/audit/explain/{order_id}")
-async def explain(
-    order_id: str, request: Request, uow: UnitOfWork = Depends(get_uow)
-) -> dict[str, Any]:
-    """§22: the ordered causal timeline for one order, with hashes --
-    never a secret, private key, raw webhook signature/body, or sensitive
-    internal configuration value (only `application.explain_service`'s
-    own deliberately-narrow payload projections ever reach this
-    response)."""
-    _require_read_token(request)
-    try:
-        result = await explain_order(uow, order_id)
-    except OrderNotFoundForExplain:
-        raise HTTPException(
-            status_code=404, detail={"reason_code": "ORDER_NOT_FOUND", "order_id": order_id}
-        ) from None
-
+def render_explain_result(result: ExplainResult) -> dict[str, Any]:
+    """Shared response shape for both the read-token-gated reviewer route
+    below and the buyer-facing proxy (`interfaces/http/routers/buyer.py`)
+    -- one projection of `ExplainResult`, never a second reimplementation,
+    so both callers stay byte-identical in what they can possibly expose."""
     anchor = result.anchor
     return {
         "order_id": result.order_id,
@@ -81,3 +69,23 @@ async def explain(
             for item in result.timeline
         ],
     }
+
+
+@router.get("/audit/explain/{order_id}")
+async def explain(
+    order_id: str, request: Request, uow: UnitOfWork = Depends(get_uow)
+) -> dict[str, Any]:
+    """§22: the ordered causal timeline for one order, with hashes --
+    never a secret, private key, raw webhook signature/body, or sensitive
+    internal configuration value (only `application.explain_service`'s
+    own deliberately-narrow payload projections ever reach this
+    response)."""
+    _require_read_token(request)
+    try:
+        result = await explain_order(uow, order_id)
+    except OrderNotFoundForExplain:
+        raise HTTPException(
+            status_code=404, detail={"reason_code": "ORDER_NOT_FOUND", "order_id": order_id}
+        ) from None
+
+    return render_explain_result(result)

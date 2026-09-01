@@ -59,6 +59,41 @@ def test_quote_pins_price_and_catalog_version(client: CatalogTestClient) -> None
     assert body["currency"] == "INR"
 
 
+def test_quote_for_untouched_item_pins_live_version_not_stale_item_version(
+    client: CatalogTestClient,
+) -> None:
+    """A quote must pin the live global catalog_version at issuance time,
+    not this item's own last-mutated marker -- otherwise an item that's
+    never itself been price-mutated would spuriously, permanently look
+    STALE_PRICE the instant *any other* item in the catalog is ever
+    mutated (e.g. by the demo-only stale-price scenario)."""
+    mandate = make_locked_mandate()
+    client.seed_mandate(mandate)
+    client.seed_items(
+        [
+            make_catalog_item("QTE-UNTOUCHED-01", unit_price_minor=100000),
+            make_catalog_item("QTE-MUTATED-01", unit_price_minor=100000),
+        ]
+    )
+
+    mutate_resp = client.http.post(
+        "/admin/catalog/QTE-MUTATED-01/price",
+        headers={"Authorization": "Bearer demo-admin-token-change-me"},
+        json={"unit_price_minor": 150000},
+    )
+    assert mutate_resp.status_code == 200, mutate_resp.text
+
+    quote_resp = client.http.post(
+        "/agent/v1/quote",
+        json={"sku": "QTE-UNTOUCHED-01", "mandate_id": mandate.mandate_id, "nights": 1},
+    )
+    assert quote_resp.status_code == 201, quote_resp.text
+    quote = quote_resp.json()
+
+    live = client.http.get("/agent/v1/catalog?category=travel.hotel").json()
+    assert quote["catalog_version"] == live["catalog_version"]
+
+
 @pytest.mark.asyncio(loop_scope="session")
 async def test_quote_expires_after_ttl(
     session_factory: async_sessionmaker[AsyncSession],
