@@ -11,6 +11,7 @@ from types import TracebackType
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from actl.infrastructure.db.engine import get_session_factory
+from actl.infrastructure.db.repositories.addon_purchases import AddonPurchaseRepository
 from actl.infrastructure.db.repositories.agent_identities import AgentIdentityRepository
 from actl.infrastructure.db.repositories.audit_checkpoints import AuditCheckpointRepository
 from actl.infrastructure.db.repositories.audit_log import AuditLogRepository
@@ -31,6 +32,7 @@ from actl.infrastructure.db.repositories.webhook_events import WebhookEventRepos
 class UnitOfWork:
     mandates: MandateRepository
     catalog: CatalogRepository
+    addon_purchases: AddonPurchaseRepository
     decisions: DecisionRepository
     quotes: QuoteRepository
     orders: OrderRepository
@@ -56,6 +58,7 @@ class UnitOfWork:
         session = self._session
         self.mandates = MandateRepository(session)
         self.catalog = CatalogRepository(session)
+        self.addon_purchases = AddonPurchaseRepository(session)
         self.decisions = DecisionRepository(session)
         self.quotes = QuoteRepository(session)
         self.orders = OrderRepository(session)

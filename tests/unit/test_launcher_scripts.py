@@ -298,6 +298,86 @@ def test_unrelated_port_owner_is_identified_but_never_reported_as_actl_owned(
         proc.wait()
 
 
+# --------------------------------------------------------------------------
+# LLM opt-in: safe-by-default, but an explicit .env opt-in is respected
+# --------------------------------------------------------------------------
+
+
+def test_env_file_value_reads_the_last_matching_line(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("LLM_ENABLED=false\nLLM_ENABLED=true\nOTHER=1\n")
+
+    result = _run(f'env_file_value "{env_file}" LLM_ENABLED', cwd=tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "true"
+
+
+def test_env_file_value_is_empty_for_a_missing_key_or_file(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("OTHER=1\n")
+    missing_file = tmp_path / "does-not-exist"
+
+    present_key_missing = _run(
+        f'env_file_value "{env_file}" LLM_ENABLED; echo "exit=$?"', cwd=tmp_path
+    )
+    missing_file_result = _run(
+        f'env_file_value "{missing_file}" LLM_ENABLED; echo "exit=$?"', cwd=tmp_path
+    )
+
+    assert present_key_missing.stdout.strip() == "exit=0"
+    assert missing_file_result.stdout.strip() == "exit=0"
+
+
+def test_llm_opt_in_present_requires_both_enabled_and_a_real_key(tmp_path: Path) -> None:
+    both_set = tmp_path / "both.env"
+    both_set.write_text("LLM_ENABLED=true\nGROQ_API_KEY=gsk_real_looking_value\n")
+    enabled_but_no_key = tmp_path / "no_key.env"
+    enabled_but_no_key.write_text("LLM_ENABLED=true\nGROQ_API_KEY=\n")
+    key_but_disabled = tmp_path / "disabled.env"
+    key_but_disabled.write_text("LLM_ENABLED=false\nGROQ_API_KEY=gsk_real_looking_value\n")
+
+    opted_in = _run(f'llm_opt_in_present "{both_set}"; echo "present=$?"', cwd=tmp_path)
+    no_key = _run(f'llm_opt_in_present "{enabled_but_no_key}"; echo "present=$?"', cwd=tmp_path)
+    disabled = _run(f'llm_opt_in_present "{key_but_disabled}"; echo "present=$?"', cwd=tmp_path)
+
+    assert "present=0" in opted_in.stdout, "both LLM_ENABLED=true and a real key must opt in"
+    assert "present=1" in no_key.stdout, "an empty key must never count as an opt-in"
+    assert "present=1" in disabled.stdout, "LLM_ENABLED=false must never opt in, key or not"
+
+
+def test_start_sh_prefers_a_calling_environment_override_over_the_env_file() -> None:
+    # A caller that already exported LLM_ENABLED (CI, this repo's own test
+    # harness) wins via normal process-env inheritance regardless of what
+    # start.sh decides -- the script must report that truthfully instead
+    # of printing a stale guess based on .env content alone.
+    text = START_SH.read_text()
+    assert 'LLM_ENABLED+set' in text
+    assert "from calling environment" in text
+
+
+def test_start_sh_forces_llm_disabled_when_env_lacks_a_full_opt_in() -> None:
+    # A fresh clone's generated .env (LLM_ENABLED=false, no real key) must
+    # still make start.sh force the override on -- this is the safe-default
+    # half of the same guarantee llm_opt_in_present covers above.
+    text = START_SH.read_text()
+    assert 'llm_override=("LLM_ENABLED=false")' in text
+    assert "llm_opt_in_present" in text
+
+
+def test_start_sh_source_never_reads_a_groq_api_key_value() -> None:
+    # Static guarantee: start.sh may mention GROQ_API_KEY in a comment,
+    # but must never expand it as a shell variable ($GROQ_API_KEY /
+    # ${GROQ_API_KEY}) -- the only place that reads it at all is
+    # llm_opt_in_present (scripts/_launcher_lib.sh), which only tests
+    # emptiness and never assigns the value to a variable of its own.
+    text = START_SH.read_text()
+    assert not re.search(r"\$\{?GROQ_API_KEY\b", text), (
+        "start.sh must never expand GROQ_API_KEY as a shell variable -- that check belongs "
+        "in llm_opt_in_present, which only tests emptiness"
+    )
+
+
 def test_start_sh_never_calls_kill() -> None:
     # start.sh only ever starts or reuses services -- refusing on a port
     # conflict, never terminating an unrelated process, is enforced here

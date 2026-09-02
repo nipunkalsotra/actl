@@ -208,8 +208,8 @@ export function DemoLabSection() {
           Demo Lab
         </h1>
         <p className="mt-1 text-sm text-navy-500">
-          Safe sandbox for a live demonstration -- isolated, guarded, never touches real inventory
-          or payments.
+          Safe local simulator for a live demonstration -- isolated, guarded, never touches real
+          inventory or payments. Runs here are demo scenario activity, not organic customer growth.
         </p>
       </div>
 

@@ -61,22 +61,29 @@ function Bars({ metric }: { metric: Metric }) {
   );
 }
 
+// A conversion-rate/AOV comparison between two arms is not meaningful
+// below a minimum sample size -- an 8-vs-3-session "70% vs 33%"
+// comparison would just be noise dressed up as a finding.
+export const MIN_SESSIONS_PER_ARM = 10;
+
 interface GrowthChartProps {
   baseline: GrowthArmMetrics;
   upsell: GrowthArmMetrics;
 }
 
 export function GrowthChart({ baseline, upsell }: GrowthChartProps) {
-  const hasData = baseline.orders > 0 || upsell.orders > 0;
+  const hasEnoughData =
+    baseline.sessions >= MIN_SESSIONS_PER_ARM && upsell.sessions >= MIN_SESSIONS_PER_ARM;
   const metrics = buildMetrics(baseline, upsell);
 
-  if (!hasData) {
+  if (!hasEnoughData) {
     return (
       <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-sky-100 bg-white text-center shadow-card">
-        <p className="text-sm font-medium text-navy-700">No growth sessions recorded yet</p>
+        <p className="text-sm font-medium text-navy-700">Not enough completed sessions to compare yet</p>
         <p className="mt-1 max-w-xs text-xs text-navy-500">
-          Run <code className="rounded bg-sky-50 px-1 py-0.5">actl growth</code> against this
-          environment to generate real baseline/upsell session data.
+          Needs at least {MIN_SESSIONS_PER_ARM} completed sessions in each arm (currently baseline:{" "}
+          {baseline.sessions}, upsell: {upsell.sessions}). Run{" "}
+          <code className="rounded bg-sky-50 px-1 py-0.5">actl growth</code> to generate more.
         </p>
       </div>
     );

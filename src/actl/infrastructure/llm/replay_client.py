@@ -16,12 +16,14 @@ from typing import cast
 
 from actl.application.ports import LLMUnavailable
 from actl.infrastructure.llm.canonical_prompt import canonical_prompt_key
+from actl.infrastructure.llm.health import LLMHealth
 
 
 class ReplayLLMClient:
-    def __init__(self, *, cassette_dir: Path, model: str) -> None:
+    def __init__(self, *, cassette_dir: Path, model: str, health: LLMHealth | None = None) -> None:
         self._dir = cassette_dir
         self._model = model
+        self._health = health or LLMHealth()
 
     async def complete_json(self, *, system: str, user: str, max_tokens: int) -> dict[str, object]:
         result = self._load(mode="json", system=system, user=user)
@@ -41,4 +43,5 @@ class ReplayLLMClient:
         if not path.exists():
             raise LLMUnavailable(f"no DEMO_REPLAY cassette recorded for this prompt ({cache_key})")
         cassette = json.loads(path.read_text())
+        self._health.mark_success()
         return cassette["response"]

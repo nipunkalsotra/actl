@@ -41,6 +41,57 @@ test.describe("assistant chat: open/close, chips, clarification never invents a 
     await expect(page.getByText("Draft", { exact: true })).toBeVisible();
   });
 
+  test("partial info narrows to the one missing field instead of the generic all-field message", async ({
+    page,
+  }) => {
+    // Reproduces the exact reported bug: this message has real signal
+    // (hotel, Goa, 2 nights, Rs 10k) that must not be discarded in favour
+    // of asking about every required slot again.
+    const chat = page.getByRole("complementary", { name: "ACTL travel assistant" });
+    await openChat(page);
+    await page.getByLabel("Message ACTL assistant").fill("2 night hotel stay in Goa budget 10k");
+    await page.getByRole("button", { name: "Send message" }).click();
+
+    await expect(chat.getByText("What check-in date do you want?")).toBeVisible({
+      timeout: 15_000,
+    });
+    // Never the generic all-field message alongside it.
+    await expect(chat.getByText("What kind of purchase is this")).toHaveCount(0);
+    await expect(chat.getByText("What currency is your budget in?")).toHaveCount(0);
+    await expect(chat.getByText("What's your total budget for this booking?")).toHaveCount(0);
+    // Acknowledges what was already understood, with the real budget.
+    await expect(chat.getByText("₹10,000", { exact: false })).toBeVisible();
+    await expect(chat.getByText("Trip details so far")).toBeVisible();
+  });
+
+  test("a multi-turn conversation merges partial info down to a single remaining field", async ({
+    page,
+  }) => {
+    const chat = page.getByRole("complementary", { name: "ACTL travel assistant" });
+    await openChat(page);
+
+    await page.getByLabel("Message ACTL assistant").fill("book me something nice in Goa");
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(chat.getByText("What's your total budget for this booking?")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.getByLabel("Message ACTL assistant").fill("2 night hotel stay in Goa budget 10k");
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(chat.getByText("What check-in date do you want?")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.getByLabel("Message ACTL assistant").fill("15 September, refundable, 2 guests");
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(chat.getByText("How many rooms?")).toBeVisible({ timeout: 15_000 });
+
+    // Everything understood across all three turns survives into one place.
+    await expect(chat.getByText("Trip details so far")).toBeVisible();
+    await expect(chat.getByText("Refundable", { exact: true })).toBeVisible();
+    await expect(chat.getByText("2 guests", { exact: true })).toBeVisible();
+  });
+
   test("quick chips post a real message and update the matching filter", async ({ page }) => {
     // Nights defaults to 2 -- bump it away first so the chip's effect is observable.
     await page.getByRole("button", { name: "Increase nights" }).click();

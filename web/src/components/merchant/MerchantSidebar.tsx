@@ -60,7 +60,7 @@ function NavList({
           <FlaskConical size={16} />
           Demo Lab
         </button>
-        <p className="mt-1 px-2 text-xs text-coral-600/80">Safe sandbox</p>
+        <p className="mt-1 px-2 text-xs text-coral-600/80">Safe local simulator</p>
       </div>
     </nav>
   );

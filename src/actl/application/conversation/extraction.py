@@ -7,6 +7,7 @@ the model's own claim about it.
 
 from __future__ import annotations
 
+from actl.application.conversation.deterministic_fallback import deterministic_slots_from_text
 from actl.application.ports import LLMClient, LLMUnavailable
 from actl.domain.mandate.draft import (
     ClarificationNeeded,
@@ -30,9 +31,11 @@ async def extract_mandate_draft(
     """Never raises for an LLM failure. `LLMUnavailable` (rate limit,
     timeout, circuit open, LLM_ENABLED=false, or the schema-repair loop
     exhausted) falls back to §17.1's own words: "a slot-filling form: ask
-    one direct question per missing bound. Slower, still correct" -- an
-    all-empty draft asks about every required slot, which is the honest
-    answer when nothing was actually extracted."""
+    one direct question per missing bound. Slower, still correct" --
+    `deterministic_slots_from_text` still actually reads the user's text
+    (structured regex matches only, nothing invented) rather than
+    substituting a blank draft that would ask about every slot regardless
+    of what was said."""
     try:
         slots = await complete_json_with_repair(
             llm,
@@ -43,6 +46,6 @@ async def extract_mandate_draft(
             max_tokens=MAX_TOKENS,
         )
     except LLMUnavailable:
-        slots = MandateDraftSlots()
+        slots = deterministic_slots_from_text(conversation_text)
 
     return build_draft(conversation_text, slots)

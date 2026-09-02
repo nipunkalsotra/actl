@@ -43,24 +43,35 @@ export interface CatalogResponse {
   items: CatalogItem[];
 }
 
+export interface KnownMandateSlots {
+  category: string | null;
+  location: string | null;
+  check_in: string | null;
+  nights: number | null;
+  rooms: number | null;
+  currency: string | null;
+  // Informational only -- neither is a required mandate bound (there is
+  // no "guests" field on the mandate; refundability is set from the
+  // review card), surfaced purely so the chat can acknowledge them.
+  guests: number | null;
+  refundable: boolean | null;
+}
+
 export interface ClarificationNeeded {
   status: "clarification_needed";
   missing_slots: string[];
   questions: string[];
+  slots: KnownMandateSlots;
+  // The already-verified budget, once given -- even while another field
+  // is still missing -- never a guessed or model-computed number.
+  max_total_minor: number | null;
 }
 
 export interface MandateDraftReady {
   status: "draft_ready";
   max_total_minor: number;
   max_unit_minor: number | null;
-  slots: {
-    category: string | null;
-    location: string | null;
-    check_in: string | null;
-    nights: number | null;
-    rooms: number | null;
-    currency: string | null;
-  };
+  slots: KnownMandateSlots;
 }
 
 export type ExtractResponse = ClarificationNeeded | MandateDraftReady;
@@ -174,4 +185,31 @@ export interface ConfigResponse {
   payment_provider: string;
   razorpay_key_id: string | null;
   quote_ttl_s: number;
+  // "groq_configured": enabled + key present, but no successful request
+  // has completed yet -- must not be shown to the buyer as "available".
+  llm_status: "deterministic" | "groq_configured" | "groq_healthy";
+}
+
+// §28 P12 contextual upsell -- every field here is server-computed
+// (application.upsell_service), never client-supplied or LLM-generated.
+export interface UpsellOffer {
+  sku: string;
+  title: string;
+  unit_price_minor: number;
+  total_minor: number;
+  currency: string;
+  refundable: boolean;
+  quantity_description: string;
+}
+
+export interface UpsellOffersResponse {
+  base_order_id: string;
+  currency: string;
+  offers: UpsellOffer[];
+}
+
+export interface UpsellPurchaseResponse {
+  decision: "accept" | "reject";
+  reason_code: string | null;
+  addon_order_id: string | null;
 }

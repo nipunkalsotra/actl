@@ -69,6 +69,17 @@ port_owner_pid() {
   lsof -tiTCP:"$1" -sTCP:LISTEN 2>/dev/null | head -n1 || true
 }
 
+# Value of KEY as last set in `file` (later lines win), or empty if the
+# key/file is absent. `|| true`: "not set" is a normal outcome here, not
+# an error -- see process_cwd's comment above for why that matters under
+# `set -e`. Callers only ever test this for emptiness/equality (e.g. "is
+# GROQ_API_KEY non-empty?") -- the value itself is never echoed or logged.
+env_file_value() {
+  local file="$1" key="$2"
+  [ -f "$file" ] || return 0
+  grep -E "^${key}=" "$file" 2>/dev/null | tail -n1 | cut -d= -f2- || true
+}
+
 # Sets KEY=VALUE in `file`: replaces an existing `^KEY=...` line in place,
 # or appends the line if the key isn't present at all (e.g. a future
 # .env.example that drops one of these lines) -- either way the safe
@@ -94,6 +105,17 @@ generate_safe_env() {
   ensure_env_default "${target}" LLM_ENABLED false
   ensure_env_default "${target}" ANCHOR_PROVIDER noop
   chmod 600 "${target}"
+}
+
+# True (exit 0) iff `env_file` explicitly opts in to live Groq: both
+# LLM_ENABLED=true and a non-empty GROQ_API_KEY are already set there --
+# in which case the caller should NOT force LLM_ENABLED=false. False
+# (exit 1, the safe default for a fresh clone) otherwise. Never echoes the
+# key itself, only tests it for emptiness.
+llm_opt_in_present() {
+  local env_file="$1"
+  [ "$(env_file_value "${env_file}" LLM_ENABLED)" = "true" ] &&
+    [ -n "$(env_file_value "${env_file}" GROQ_API_KEY)" ]
 }
 
 check_postgres_ready() {

@@ -35,7 +35,6 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
   const [trips, setTrips] = useState<TripRecord[]>(() => loadTrips());
   const [detailsSku, setDetailsSku] = useState<string | null>(null);
   const [quoteDrawerOpen, setQuoteDrawerOpen] = useState(false);
-  const [proofOrderId, setProofOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem(TRIPS_STORAGE_KEY, JSON.stringify(trips));
@@ -57,7 +56,6 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
     setActiveOrder(null);
     setDetailsSku(null);
     setQuoteDrawerOpen(false);
-    setProofOrderId(null);
   };
 
   const value = useMemo<JourneyValue>(
@@ -87,8 +85,6 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
       setDetailsSku,
       quoteDrawerOpen,
       setQuoteDrawerOpen,
-      proofOrderId,
-      setProofOrderId,
       resetForNewBrowse,
     }),
     [
@@ -104,7 +100,6 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
       trips,
       detailsSku,
       quoteDrawerOpen,
-      proofOrderId,
     ],
   );
 

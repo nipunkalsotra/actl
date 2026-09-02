@@ -49,13 +49,18 @@ def test_complete_slots_with_verbatim_evidence_produce_a_draft() -> None:
     assert result.max_unit_minor is None
 
 
-def test_every_required_slot_missing_produces_one_question_each() -> None:
+def test_every_required_slot_missing_still_asks_only_the_top_priority_question() -> None:
+    """Progressive collection: `missing_slots` still names every required
+    field that's absent, but `questions` is only the single next thing to
+    actually ask -- never the whole form dumped at once, even when
+    genuinely everything is missing."""
     slots = MandateDraftSlots()
     missing = missing_required_slots(slots)
     assert missing == REQUIRED_SLOTS
     result = build_draft("book me something nice", slots)
     assert isinstance(result, ClarificationNeeded)
-    assert len(result.questions) == len(REQUIRED_SLOTS)
+    assert len(result.questions) == 1
+    assert result.questions == ("What's your total budget for this booking?",)
 
 
 def test_evidence_span_not_matching_the_real_text_is_rejected() -> None:

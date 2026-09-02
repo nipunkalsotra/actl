@@ -45,6 +45,29 @@ _SLOT_QUESTIONS: dict[str, str] = {
     "max_total_minor": "What's your total budget for this booking?",
 }
 
+# Which single missing slot to actually ask about next -- distinct from
+# REQUIRED_SLOTS' declaration order. Budget goes first: it's the one bound
+# this system can never silently default (§17.1), so a vague first message
+# should narrow straight to the safety-critical question rather than the
+# (structurally fixed, single-catalog) category slot. Progressive
+# collection asks one question per turn instead of the whole form at once.
+_QUESTION_PRIORITY: tuple[str, ...] = (
+    "max_total_minor",
+    "location",
+    "check_in",
+    "nights",
+    "rooms",
+    "category",
+    "currency",
+)
+
+
+def _next_questions(missing: tuple[str, ...]) -> tuple[str, ...]:
+    for slot in _QUESTION_PRIORITY:
+        if slot in missing:
+            return (_SLOT_QUESTIONS[slot],)
+    return ()
+
 
 class MoneyEvidence(BaseModel):
     """One extracted monetary bound, with the exact substring of the
@@ -65,7 +88,12 @@ class MandateDraftSlots(BaseModel):
     optional -- None means "not yet said," never "assume a default."
     Money fields carry evidence instead of a bare minor-unit integer: the
     integer is derived later, in code, from the verbatim evidence text,
-    never accepted directly from the model."""
+    never accepted directly from the model.
+
+    `guests`/`refundable` are informational only -- neither is in
+    REQUIRED_SLOTS (there is no mandate-schema "guests" bound, and
+    refundability is set via the review card, not extracted); they exist
+    so the chat can acknowledge what it understood without discarding it."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -77,6 +105,8 @@ class MandateDraftSlots(BaseModel):
     currency: str | None = None
     max_total_minor_evidence: MoneyEvidence | None = None
     max_unit_minor_evidence: MoneyEvidence | None = None
+    guests: int | None = None
+    refundable: bool | None = None
 
 
 class MandateDraft(BaseModel):
@@ -95,13 +125,23 @@ class MandateDraft(BaseModel):
 class ClarificationNeeded(BaseModel):
     """U1's fallback contract (§17.1): "ask one direct question per
     missing bound." `missing_slots` names every §9.1-required field the
-    draft does not have, in `REQUIRED_SLOTS` order; `questions` is the
-    one-question-per-slot form, same order."""
+    draft does not have, in `REQUIRED_SLOTS` order. `questions` is the
+    single highest-priority question to actually ask right now (see
+    `_QUESTION_PRIORITY`) -- progressive collection, not the whole form at
+    once. `slots` carries everything already understood (including the
+    non-required `guests`/`refundable`) so a caller can acknowledge it
+    instead of repeating a generic ask-about-everything message.
+    `max_total_minor` is the already-*verified* budget (computed the same
+    way as MandateDraft's, never the model's own number) when one other
+    required slot is still missing -- so a caller can say "up to ₹10,000"
+    without waiting for the draft to be otherwise complete."""
 
     model_config = ConfigDict(frozen=True)
 
     missing_slots: tuple[str, ...]
     questions: tuple[str, ...]
+    slots: MandateDraftSlots
+    max_total_minor: int | None = None
 
 
 def missing_required_slots(slots: MandateDraftSlots) -> tuple[str, ...]:
@@ -132,12 +172,21 @@ def verify_money_evidence(conversation_text: str, evidence: MoneyEvidence) -> in
     if conversation_text[evidence.start : evidence.end] != evidence.numeral_text:
         return None
     cleaned = evidence.numeral_text.strip().lstrip("₹$").replace(",", "").strip()
+    # "10k" is a common, unambiguous shorthand for 10,000 -- the numeral
+    # itself is still required to appear verbatim in the user's text
+    # (checked above); this only interprets the trailing suffix, it never
+    # lets the model supply a multiplier of its own.
+    multiplier = 1
+    if cleaned[-1:] in ("k", "K"):
+        multiplier = 1000
+        cleaned = cleaned[:-1]
     try:
         major = Decimal(cleaned)
     except InvalidOperation:
         return None
     if major <= 0:
         return None
+    major *= multiplier
     minor = major * 100
     if minor != minor.to_integral_value():
         return None
@@ -166,7 +215,10 @@ def build_draft(
     if missing:
         ordered = tuple(slot for slot in REQUIRED_SLOTS if slot in missing)
         return ClarificationNeeded(
-            missing_slots=ordered, questions=tuple(_SLOT_QUESTIONS[slot] for slot in ordered)
+            missing_slots=ordered,
+            questions=_next_questions(ordered),
+            slots=slots,
+            max_total_minor=max_total_minor,
         )
 
     assert max_total_minor is not None  # not missing => verified above

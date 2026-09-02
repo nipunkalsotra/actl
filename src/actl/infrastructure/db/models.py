@@ -19,6 +19,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, ENUM, JSONB
@@ -188,6 +189,10 @@ class OrderRow(Base):
     provider_order_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     provider_payment_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     decline_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # NULL = organic. Written only by application/demo.py and
+    # application/growth/simulation.py's own orchestration, never by
+    # gate.py/saga.py -- see migration 0010's docstring.
+    source: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
 
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -199,7 +204,48 @@ class OrderRow(Base):
 
     )
 
-    __table_args__ = (CheckConstraint("amount_minor > 0", name="orders_amount_minor_positive"),)
+    __table_args__ = (
+        CheckConstraint("amount_minor > 0", name="orders_amount_minor_positive"),
+        CheckConstraint(
+            "source IS NULL OR source IN ('demo_lab', 'growth_simulation')",
+            name="ck_orders_source",
+        ),
+    )
+
+
+class AddonPurchaseRow(Base):
+    """§28 P12 contextual upsell: the single source of truth for the real,
+    buyer-driven post-booking add-on flow -- both the duplicate-purchase
+    guard (UNIQUE(base_order_id, offer_sku)) and the offered/accepted/
+    settled/declined counter merchant metrics read from. See migration
+    0010's docstring for why this is deliberately separate from the
+    synthetic growth-simulator's outbox-event-based A/B metrics."""
+
+    __tablename__ = "addon_purchases"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    base_order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"), nullable=False)
+    offer_sku: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    addon_mandate_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    addon_order_id: Mapped[str | None] = mapped_column(ForeignKey("orders.id"), nullable=True)
+    price_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(CHAR(3), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint("price_minor > 0", name="addon_purchases_price_minor_positive"),
+        CheckConstraint(
+            "status IN ('offered', 'pending', 'settled', 'failed', 'declined')",
+            name="ck_addon_purchases_status",
+        ),
+        UniqueConstraint("base_order_id", "offer_sku", name="uq_addon_purchases_base_offer"),
+    )
 
 
 class LedgerEntryRow(Base):

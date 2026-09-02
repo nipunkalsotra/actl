@@ -75,9 +75,6 @@ export interface JourneyValue {
   quoteDrawerOpen: boolean;
   setQuoteDrawerOpen: (open: boolean) => void;
 
-  proofOrderId: string | null;
-  setProofOrderId: (orderId: string | null) => void;
-
   resetForNewBrowse: () => void;
 }
 

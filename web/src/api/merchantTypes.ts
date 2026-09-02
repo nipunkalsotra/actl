@@ -16,6 +16,9 @@ export interface MerchantOrderItem {
   currency: string;
   status: string;
   decline_reason: string | null;
+  // null = organic. "demo_lab" | "growth_simulation" = a guarded
+  // scenario/seeded session, never real customer activity.
+  source: string | null;
   created_at: string | null;
 }
 
@@ -80,9 +83,28 @@ export interface MerchantOrderAudit extends ExplainResponse {
   chain_verified: boolean | null;
 }
 
+// §28 P12: the real, buyer-driven upsell counters -- deliberately
+// separate from `baseline`/`upsell` above (the synthetic growth-simulator
+// A/B arms). `attach_rate` is null when `offered` is 0 (no invented rate).
+export interface RealUpsellMetrics {
+  offered: number;
+  accepted: number;
+  settled: number;
+  declined: number;
+  attach_rate: number | null;
+  settled_revenue_minor: number;
+}
+
+export interface OrganicSalesMetrics {
+  orders: number;
+  gross_sales_minor: number;
+}
+
 export interface MerchantKpisResponse {
   baseline: GrowthArmMetrics;
   upsell: GrowthArmMetrics;
   revenue_uplift: number;
   protected_offers_blocked: number;
+  real_upsell: RealUpsellMetrics;
+  organic: OrganicSalesMetrics;
 }

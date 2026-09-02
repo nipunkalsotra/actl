@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Briefcase, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { formatMinor } from "../lib/money";
 import { useJourney } from "../state/journeyContext";
 import { Overlay } from "./Overlay";
@@ -10,7 +11,8 @@ interface MyTripsDrawerProps {
 }
 
 export function MyTripsDrawer({ open, onClose }: MyTripsDrawerProps) {
-  const { trips, setProofOrderId } = useJourney();
+  const { trips } = useJourney();
+  const navigate = useNavigate();
 
   return (
     <Overlay open={open} onClose={onClose}>
@@ -65,10 +67,10 @@ export function MyTripsDrawer({ open, onClose }: MyTripsDrawerProps) {
                   <p className="mt-2 text-sm font-medium text-navy-900">{formatMinor(trip.totalMinor)}</p>
                   <button
                     type="button"
-                    onClick={() => setProofOrderId(trip.orderId)}
+                    onClick={() => navigate(`/merchant?order_id=${trip.orderId}&panel=proof`)}
                     className="mt-3 rounded-full border border-sky-100 px-3 py-1.5 text-xs font-medium text-navy-700 hover:bg-sky-50"
                   >
-                    Verify proof
+                    View proof
                   </button>
                 </li>
               ))}

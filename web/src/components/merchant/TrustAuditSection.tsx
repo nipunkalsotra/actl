@@ -1,6 +1,7 @@
-import { BadgeCheck, ExternalLink, Link2, ShieldCheck } from "lucide-react";
+import { BadgeCheck, CircleAlert, ExternalLink, Link2, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useMerchantTrust } from "../../api/merchantHooks";
+import { describeAnchorStatus } from "../../lib/anchorStatus";
 
 const GUARANTEES = [
   {
@@ -97,10 +98,24 @@ export function TrustAuditSection() {
               <ExternalLink size={13} />
             </a>
           ) : (
-            <p className="flex items-center gap-1.5 text-xs text-navy-500">
-              <Link2 size={13} />
-              No checkpoint anchored to Monad Testnet yet (anchoring is optional and asynchronous).
-            </p>
+            (() => {
+              const anchorDesc = describeAnchorStatus(
+                trust.data.latest_checkpoint
+                  ? { status: trust.data.latest_checkpoint.anchor_status }
+                  : null,
+              );
+              return (
+                <p
+                  className={`flex items-center gap-1.5 text-xs ${
+                    anchorDesc.tone === "conflict" ? "text-coral-700" : "text-navy-500"
+                  }`}
+                >
+                  {anchorDesc.tone === "conflict" ? <CircleAlert size={13} /> : <Link2 size={13} />}
+                  {anchorDesc.headline}
+                  {anchorDesc.detail ? ` — ${anchorDesc.detail}` : ""}
+                </p>
+              );
+            })()
           )}
         </div>
       )}

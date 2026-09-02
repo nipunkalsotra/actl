@@ -4,12 +4,13 @@ import type {
   CatalogResponse,
   CheckoutResponse,
   ConfigResponse,
-  ExplainResponse,
   ExtractResponse,
   MandateResponse,
   OrderStatusResponse,
   ProposeResponse,
   QuoteResponse,
+  UpsellOffersResponse,
+  UpsellPurchaseResponse,
 } from "./types";
 
 export function useConfig() {
@@ -86,10 +87,32 @@ export function useOrderStatus(orderId: string | null) {
   });
 }
 
-export function useAuditExplain(orderId: string | null) {
+// §28 P12 contextual upsell -- enabled only once the caller knows the
+// base order actually reached its real terminal CAPTURED state; the
+// backend re-derives eligibility from real data regardless, this just
+// avoids a pointless call before that's possible.
+export function useUpsellOffers(baseOrderId: string | null, enabled: boolean) {
   return useQuery({
-    queryKey: ["explain", orderId],
-    queryFn: () => apiGet<ExplainResponse>(`/buyer/v1/audit/explain/${orderId}`),
-    enabled: orderId !== null,
+    queryKey: ["upsell-offers", baseOrderId],
+    queryFn: () => apiGet<UpsellOffersResponse>(`/buyer/v1/upsell/offers?order_id=${baseOrderId}`),
+    enabled: enabled && baseOrderId !== null,
+  });
+}
+
+export function usePurchaseUpsell() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { base_order_id: string; offer_sku: string }) =>
+      apiPost<UpsellPurchaseResponse>("/buyer/v1/upsell/purchase", input),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ["upsell-offers", variables.base_order_id] });
+    },
+  });
+}
+
+export function useDeclineUpsell() {
+  return useMutation({
+    mutationFn: (input: { base_order_id: string }) =>
+      apiPost<{ status: string }>("/buyer/v1/upsell/decline", input),
   });
 }

@@ -22,6 +22,7 @@ from actl.application.ports import LLMClient, PaymentProvider
 from actl.infrastructure.cache.nonce import NonceCache
 from actl.infrastructure.db.engine import get_session_factory as _get_session_factory
 from actl.infrastructure.db.uow import UnitOfWork
+from actl.infrastructure.llm.health import LLMHealth
 from actl.platform.breaker import CircuitBreaker
 from actl.platform.clock import Clock, SystemClock
 
@@ -43,6 +44,10 @@ def get_payment_provider(request: Request) -> PaymentProvider:
 
 def get_llm_client(request: Request) -> LLMClient:
     return cast(LLMClient, request.app.state.llm_client)
+
+
+def get_llm_health(request: Request) -> LLMHealth:
+    return cast(LLMHealth, request.app.state.llm_health)
 
 
 def get_redis(request: Request) -> Redis:
