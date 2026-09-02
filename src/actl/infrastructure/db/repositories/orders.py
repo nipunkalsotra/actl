@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from actl.infrastructure.db.models import OrderRow
@@ -37,6 +37,7 @@ class OrderRecord:
     provider_order_id: str | None = None
     provider_payment_id: str | None = None
     decline_reason: str | None = None
+    source: str | None = None
     created_at: datetime | None = None
 
 
@@ -54,6 +55,7 @@ def order_row_to_record(row: OrderRow) -> OrderRecord:
         provider_order_id=row.provider_order_id,
         provider_payment_id=row.provider_payment_id,
         decline_reason=row.decline_reason,
+        source=row.source,
         created_at=row.created_at,
     )
 
@@ -116,6 +118,32 @@ class OrderRepository:
             )
         )
         return [order_row_to_record(row) for row in result.scalars()]
+
+    async def set_source(self, order_id: str, source: str) -> None:
+        """Tags a non-organic order (Demo Lab / growth simulation) so
+        merchant KPIs and Live Orders never present it as real customer
+        activity. Called only from application/demo.py and
+        application/growth/simulation.py's own orchestration, after the
+        shared gate/saga functions have already run -- never from
+        gate.py/saga.py themselves."""
+        row = await self._session.get(OrderRow, order_id)
+        if row is None:
+            raise KeyError(order_id)
+        row.source = source
+
+    async def count_and_sum_captured(self, *, organic_only: bool) -> tuple[int, int]:
+        """Real gross sales / completed orders for merchant KPIs.
+        `organic_only=True` excludes Demo Lab / growth-simulation-tagged
+        rows (source IS NOT NULL) -- so a KPI never counts a merchant's
+        own guarded demo clicks as real customer revenue."""
+        stmt = select(func.count(), func.coalesce(func.sum(OrderRow.amount_minor), 0)).where(
+            OrderRow.status == "CAPTURED"
+        )
+        if organic_only:
+            stmt = stmt.where(OrderRow.source.is_(None))
+        result = await self._session.execute(stmt)
+        count, total = result.one()
+        return int(count), int(total)
 
     async def list_recent(self, limit: int = 50) -> list[OrderRecord]:
         """§28 P12 merchant live-orders view: the newest orders, read-only.

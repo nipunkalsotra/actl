@@ -55,13 +55,15 @@ test.describe("live orders + Order Explorer", () => {
     await expect(explorer).toHaveCount(0);
   });
 
-  test("Open audit explanation reveals real per-entry evidence", async ({ page }) => {
+  test("Show detailed evidence reveals real per-entry evidence", async ({ page }) => {
+    // The redundant second "Open audit explanation" control (identical
+    // to this toggle) was removed -- one working control, not two doing
+    // the same thing.
     await page.locator("tbody tr").first().getByRole("button", { name: "View", exact: true }).click();
     const explorer = page.getByRole("dialog", { name: "Order Explorer" });
     await expect(explorer).toBeVisible();
 
-    await explorer.getByRole("link", { name: "Open audit explanation" }).click();
-    await expect(explorer.getByText("Show detailed evidence")).toHaveCount(0);
+    await explorer.getByRole("button", { name: "Show detailed evidence" }).click();
     const firstDetail = explorer.locator("details").first();
     await expect(firstDetail).toBeVisible();
   });
@@ -74,8 +76,13 @@ test.describe("live orders + Order Explorer", () => {
     await expect(explorer).toBeVisible();
 
     await expect(explorer.getByRole("link", { name: "View Monad proof" })).toHaveCount(0);
+    // Two honest, distinct "not anchored" states -- never a false
+    // "anchored" claim either way.
     await expect(
-      explorer.getByText("No Monad Testnet anchor exists yet for this order's checkpoint."),
+      explorer
+        .getByText("Awaiting the next audit checkpoint")
+        .or(explorer.getByText(/hasn't been anchored to Monad Testnet yet/))
+        .first(),
     ).toBeVisible();
   });
 });

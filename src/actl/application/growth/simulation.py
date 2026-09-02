@@ -280,6 +280,12 @@ async def _attempt_purchase(
 
     async with UnitOfWork(session_factory) as uow:
         order = await uow.orders.get(order_id)
+        # §28 P12: every order this seeded A/B session creates is
+        # synthetic growth-simulation data, never a real customer
+        # purchase -- tagged so merchant KPIs' organic gross sales and
+        # Live Orders' display never present it as one (migration 0010).
+        await uow.orders.set_source(order_id, "growth_simulation")
+        await uow.commit()
     assert order is not None and order.provider_order_id is not None
     payments = await provider.fetch_payments(order.provider_order_id)
     payment = payments[0]

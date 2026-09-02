@@ -29,6 +29,14 @@ const TONE_CLASSES: Record<string, string> = {
   neutral: "bg-sky-100 text-navy-700",
 };
 
+// §28 P12: never let a guarded Demo Lab run or a seeded growth-simulation
+// session read as organic customer activity in this list.
+function sourceLabel(source: string | null): string | null {
+  if (source === "demo_lab") return "Demo";
+  if (source === "growth_simulation") return "Simulated";
+  return null;
+}
+
 interface LiveOrdersSectionProps {
   onOpenOrder: (orderId: string) => void;
 }
@@ -122,7 +130,14 @@ export function LiveOrdersSection({ onOpenOrder }: LiveOrdersSectionProps) {
                 return (
                   <tr key={order.order_id} className="border-b border-sky-100 last:border-0 hover:bg-sky-50">
                     <td className="px-4 py-3 font-mono text-xs text-navy-700">{order.order_id}</td>
-                    <td className="px-4 py-3 text-navy-900">{order.sku ?? "—"}</td>
+                    <td className="px-4 py-3 text-navy-900">
+                      {order.sku ?? "—"}
+                      {sourceLabel(order.source) && (
+                        <span className="ml-2 rounded-full bg-coral-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-coral-600">
+                          {sourceLabel(order.source)}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-medium text-navy-900">{formatMinor(order.amount_minor)}</td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${TONE_CLASSES[status.tone]}`}>

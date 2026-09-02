@@ -22,6 +22,7 @@ from actl.infrastructure.cache.rate_limit import TokenBucketLimiter
 from actl.infrastructure.cache.semantic_cache import SemanticCache
 from actl.infrastructure.llm.fallback import NullLLMClient
 from actl.infrastructure.llm.groq_client import GroqClient
+from actl.infrastructure.llm.health import LLMHealth
 from actl.infrastructure.llm.replay_client import ReplayLLMClient
 from actl.platform.breaker import CircuitBreaker
 from actl.platform.clock import Clock
@@ -36,11 +37,12 @@ def build_llm_client(
     breaker: CircuitBreaker,
     clock: Clock,
     cassette_dir: Path = DEFAULT_CASSETTE_DIR,
+    health: LLMHealth | None = None,
 ) -> LLMClient:
     if not settings.llm_enabled:
         return NullLLMClient()
     if settings.demo_replay:
-        return ReplayLLMClient(cassette_dir=cassette_dir, model=settings.groq_model)
+        return ReplayLLMClient(cassette_dir=cassette_dir, model=settings.groq_model, health=health)
     limiter = TokenBucketLimiter(
         redis_client, name="groq", limit_per_min=settings.llm_rate_limit_per_min, clock=clock
     )
@@ -52,4 +54,5 @@ def build_llm_client(
         breaker=breaker,
         limiter=limiter,
         cache=cache,
+        health=health,
     )

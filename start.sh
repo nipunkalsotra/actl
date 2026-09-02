@@ -115,10 +115,29 @@ start_backend() {
     exit 1
   fi
 
-  echo "== starting backend (uvicorn on 127.0.0.1:${BACKEND_PORT}, PAYMENT_PROVIDER=simulator LLM_ENABLED=false ANCHOR_PROVIDER=noop) =="
+  # Safe by default: force LLM_ENABLED=false regardless of what's in .env.
+  # Respected opt-in: if the reviewer's own .env explicitly sets both
+  # LLM_ENABLED=true and a non-empty GROQ_API_KEY, don't force it back off
+  # -- omit the override so uvicorn's own .env loading (pydantic-settings,
+  # CWD=REPO_ROOT via the `cd` below) picks up the developer's own values
+  # unforced. The key itself is only ever tested for emptiness here, never
+  # read into a variable that gets printed or logged.
+  local llm_override=("LLM_ENABLED=false")
+  local llm_status_msg="LLM_ENABLED=false"
+  if [ -n "${LLM_ENABLED+set}" ]; then
+    # The calling shell already set this explicitly (env inheritance means
+    # it would win over any override below regardless) -- respect it as-is
+    # and report what will actually run, rather than a guess from .env.
+    llm_override=()
+    llm_status_msg="LLM_ENABLED=${LLM_ENABLED} (from calling environment)"
+  elif llm_opt_in_present "${REPO_ROOT}/.env"; then
+    llm_override=()
+    llm_status_msg="LLM_ENABLED=true (opt-in from .env, Groq API key present)"
+  fi
+  echo "== starting backend (uvicorn on 127.0.0.1:${BACKEND_PORT}, PAYMENT_PROVIDER=simulator ANCHOR_PROVIDER=noop, ${llm_status_msg}) =="
   (
     cd "${REPO_ROOT}"
-    exec env ANCHOR_PROVIDER=noop LLM_ENABLED=false PAYMENT_PROVIDER=simulator \
+    exec env ANCHOR_PROVIDER=noop PAYMENT_PROVIDER=simulator "${llm_override[@]}" \
       uv run uvicorn actl.main:app --host 127.0.0.1 --port "${BACKEND_PORT}" \
       >>"${BACKEND_LOG}" 2>&1
   ) &

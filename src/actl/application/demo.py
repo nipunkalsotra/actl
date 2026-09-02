@@ -271,6 +271,12 @@ async def _propose_and_settle(
     saga_id = str(outcome.body["saga_id"])
     async with UnitOfWork(session_factory) as uow:
         order = await uow.orders.get(order_id)
+        # §28 P12: every order this module creates is a guarded demo/CLI
+        # scenario run, never a real customer purchase -- tagged so
+        # merchant KPIs' organic gross sales and Live Orders' display
+        # never present it as one (migration 0010).
+        await uow.orders.set_source(order_id, "demo_lab")
+        await uow.commit()
     assert order is not None and order.provider_order_id is not None
     payments = await provider.fetch_payments(order.provider_order_id)
     payment = payments[0]
@@ -380,6 +386,11 @@ async def _stale_price(session_factory: async_sessionmaker[AsyncSession]) -> Dem
     ):
         async with UnitOfWork(session_factory) as uow:
             order = await uow.orders.get(outcome.result.order_id)
+            # §28 P12: same tagging as _propose_and_settle -- this scenario's
+            # own recovery/checkout path bypasses that helper, so it needs
+            # its own tag rather than inheriting one.
+            await uow.orders.set_source(outcome.result.order_id, "demo_lab")
+            await uow.commit()
         assert order is not None and order.provider_order_id is not None
         payments = await provider.fetch_payments(order.provider_order_id)
         payment = payments[0]

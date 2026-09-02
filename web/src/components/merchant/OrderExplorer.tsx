@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import {
+  ArrowLeft,
   BadgeCheck,
   CheckCircle2,
   CircleAlert,
@@ -9,9 +10,11 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useOrderStatus } from "../../api/hooks";
 import { useMerchantOrderAudit, useMerchantOrders } from "../../api/merchantHooks";
 import type { MerchantOrderAudit } from "../../api/merchantTypes";
+import { describeAnchorStatus } from "../../lib/anchorStatus";
 import { formatMinor } from "../../lib/money";
 import { Overlay } from "../Overlay";
 
@@ -59,8 +62,13 @@ function buildSteps(audit: MerchantOrderAudit): Step[] {
     },
     {
       label: "Monad Testnet anchored",
-      status: audit.anchor?.status === "anchored" ? "verified" : "not_tracked",
-      detail: audit.anchor?.status === "anchored" ? undefined : "Not yet anchored (optional, asynchronous)",
+      status:
+        audit.anchor?.status === "anchored"
+          ? "verified"
+          : audit.anchor?.status === "conflict"
+            ? "failed"
+            : "not_tracked",
+      detail: audit.anchor?.status === "anchored" ? undefined : describeAnchorStatus(audit.anchor).headline,
     },
   ];
 }
@@ -82,13 +90,15 @@ const STEP_TONE: Record<StepStatus, string> = {
 interface OrderExplorerProps {
   orderId: string | null;
   onClose: () => void;
+  showBackToBuyer?: boolean;
 }
 
-export function OrderExplorer({ orderId, onClose }: OrderExplorerProps) {
+export function OrderExplorer({ orderId, onClose, showBackToBuyer = false }: OrderExplorerProps) {
   const orders = useMerchantOrders(100);
   const status = useOrderStatus(orderId);
   const audit = useMerchantOrderAudit(orderId);
   const [showRawEvidence, setShowRawEvidence] = useState(false);
+  const navigate = useNavigate();
 
   const orderSummary = orders.data?.items.find((o) => o.order_id === orderId);
 
@@ -106,6 +116,15 @@ export function OrderExplorer({ orderId, onClose }: OrderExplorerProps) {
       >
         <div className="flex items-start justify-between border-b border-sky-100 px-5 py-4">
           <div className="min-w-0">
+            {showBackToBuyer && (
+              <button
+                type="button"
+                onClick={() => navigate("/")}
+                className="mb-1 flex items-center gap-1 text-xs font-medium text-ocean-600 hover:underline"
+              >
+                <ArrowLeft size={12} /> Back to buyer
+              </button>
+            )}
             <h2 className="text-base font-semibold text-navy-900">Order Explorer</h2>
             {orderSummary && (
               <p className="mt-0.5 truncate text-sm text-navy-500">{orderSummary.sku ?? "—"}</p>
@@ -203,33 +222,36 @@ export function OrderExplorer({ orderId, onClose }: OrderExplorerProps) {
               <div className="my-5 h-px bg-sky-100" />
 
               <div className="flex flex-col gap-2">
-                <a
-                  href={`#order-audit-${orderId}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setShowRawEvidence(true);
-                  }}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-ocean-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-ocean-500"
-                >
-                  <ShieldCheck size={15} />
-                  Open audit explanation
-                </a>
-
                 {audit.data.anchor?.status === "anchored" && audit.data.anchor.explorer_url ? (
                   <a
                     href={audit.data.anchor.explorer_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center justify-center gap-2 rounded-xl border border-sky-100 px-4 py-2.5 text-sm font-medium text-navy-700 hover:bg-sky-50"
+                    className="flex items-center justify-center gap-2 rounded-xl bg-ocean-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-ocean-500"
                   >
                     <BadgeCheck size={15} />
                     View Monad proof
                     <ExternalLink size={13} />
                   </a>
                 ) : (
-                  <p className="rounded-xl bg-sky-50 px-4 py-2.5 text-center text-xs text-navy-500">
-                    No Monad Testnet anchor exists yet for this order's checkpoint.
-                  </p>
+                  (() => {
+                    const anchorDesc = describeAnchorStatus(audit.data.anchor);
+                    return (
+                      <p
+                        className={`rounded-xl px-4 py-2.5 text-center text-xs ${
+                          anchorDesc.tone === "conflict"
+                            ? "bg-coral-100 text-coral-700"
+                            : "bg-sky-50 text-navy-500"
+                        }`}
+                      >
+                        {anchorDesc.tone === "conflict" && (
+                          <CircleAlert size={13} className="mr-1 inline" />
+                        )}
+                        {anchorDesc.headline}
+                        {anchorDesc.detail ? ` — ${anchorDesc.detail}` : ""}
+                      </p>
+                    );
+                  })()
                 )}
               </div>
 

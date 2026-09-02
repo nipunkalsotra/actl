@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { CheckCircle2, Clock, ShieldAlert, X } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useCatalog, useCreateQuote } from "../api/hooks";
 import { hotelDisplayName } from "../lib/hotelDisplay";
 import { formatMinor } from "../lib/money";
@@ -26,8 +27,8 @@ function reasonMessage(code: string | null): string {
 }
 
 export function QuoteDrawer() {
-  const { filters, mandate, quote, setQuote, quoteDrawerOpen, setQuoteDrawerOpen, setProofOrderId, setChatOpen } =
-    useJourney();
+  const { filters, mandate, quote, setQuote, quoteDrawerOpen, setQuoteDrawerOpen } = useJourney();
+  const navigate = useNavigate();
   const catalog = useCatalog(mandate?.mandate_id ?? null);
   const createQuote = useCreateQuote();
   const { purchase, isPending } = usePurchaseFlow();
@@ -198,22 +199,12 @@ export function QuoteDrawer() {
                     <button
                       type="button"
                       onClick={() => {
+                        if (result.orderId) navigate(`/merchant?order_id=${result.orderId}&panel=proof`);
                         setQuoteDrawerOpen(false);
-                        setChatOpen(true);
                       }}
                       className="w-full rounded-xl bg-ocean-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-ocean-500"
                     >
-                      View receipt
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (result.orderId) setProofOrderId(result.orderId);
-                        setQuoteDrawerOpen(false);
-                      }}
-                      className="w-full rounded-xl border border-sky-100 px-4 py-2.5 text-sm font-medium text-navy-700 hover:bg-sky-50"
-                    >
-                      Verify proof
+                      View proof
                     </button>
                   </div>
                 </div>

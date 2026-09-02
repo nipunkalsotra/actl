@@ -1,7 +1,7 @@
 import { useMerchantKpis } from "../../api/merchantHooks";
 import { formatMinor } from "../../lib/money";
 import type { GrowthArmMetrics } from "../../api/merchantTypes";
-import { GrowthChart } from "./GrowthChart";
+import { GrowthChart, MIN_SESSIONS_PER_ARM } from "./GrowthChart";
 
 const ROWS: { key: keyof GrowthArmMetrics; label: string; format: (arm: GrowthArmMetrics) => string }[] = [
   { key: "sessions", label: "Sessions", format: (a) => String(a.sessions) },
@@ -33,36 +33,39 @@ export function GrowthSection() {
         <>
           <GrowthChart baseline={kpis.data.baseline} upsell={kpis.data.upsell} />
 
-          <div className="overflow-x-auto rounded-2xl border border-sky-100 bg-white shadow-card">
-            <table className="w-full min-w-[420px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-sky-100 text-xs font-semibold uppercase tracking-wide text-navy-500">
-                  <th scope="col" className="px-4 py-3">
-                    Metric
-                  </th>
-                  <th scope="col" className="px-4 py-3">
-                    Baseline
-                  </th>
-                  <th scope="col" className="px-4 py-3">
-                    ACTL Upsell
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {ROWS.map((row) => (
-                  <tr key={row.key} className="border-b border-sky-100 last:border-0">
-                    <th scope="row" className="px-4 py-3 font-medium text-navy-700">
-                      {row.label}
-                    </th>
-                    <td className="px-4 py-3 text-navy-900">{row.format(kpis.data.baseline)}</td>
-                    <td className="px-4 py-3 font-medium text-ocean-600">
-                      {row.format(kpis.data.upsell)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {kpis.data.baseline.sessions >= MIN_SESSIONS_PER_ARM &&
+            kpis.data.upsell.sessions >= MIN_SESSIONS_PER_ARM && (
+              <div className="overflow-x-auto rounded-2xl border border-sky-100 bg-white shadow-card">
+                <table className="w-full min-w-[420px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-sky-100 text-xs font-semibold uppercase tracking-wide text-navy-500">
+                      <th scope="col" className="px-4 py-3">
+                        Metric
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Baseline
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        ACTL Upsell
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ROWS.map((row) => (
+                      <tr key={row.key} className="border-b border-sky-100 last:border-0">
+                        <th scope="row" className="px-4 py-3 font-medium text-navy-700">
+                          {row.label}
+                        </th>
+                        <td className="px-4 py-3 text-navy-900">{row.format(kpis.data.baseline)}</td>
+                        <td className="px-4 py-3 font-medium text-ocean-600">
+                          {row.format(kpis.data.upsell)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
         </>
       )}
     </div>

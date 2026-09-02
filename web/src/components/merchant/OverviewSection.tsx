@@ -2,7 +2,7 @@ import { RefreshCw, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useMerchantKpis } from "../../api/merchantHooks";
 import { formatMinor } from "../../lib/money";
-import { GrowthChart } from "./GrowthChart";
+import { GrowthChart, MIN_SESSIONS_PER_ARM } from "./GrowthChart";
 import { HowItWorksModal } from "./HowItWorksModal";
 import { KpiCard } from "./KpiCard";
 
@@ -22,7 +22,10 @@ export function OverviewSection() {
   const kpis = useMerchantKpis();
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
 
-  const hasGrowthData = kpis.data ? kpis.data.baseline.orders > 0 || kpis.data.upsell.orders > 0 : false;
+  const hasGrowthData = kpis.data
+    ? kpis.data.baseline.sessions >= MIN_SESSIONS_PER_ARM &&
+      kpis.data.upsell.sessions >= MIN_SESSIONS_PER_ARM
+    : false;
 
   return (
     <div className="space-y-6">
@@ -51,22 +54,23 @@ export function OverviewSection() {
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <KpiCard
-          label="Revenue uplift"
+          label="Revenue uplift (simulated)"
           value={hasGrowthData && kpis.data?.revenue_uplift != null ? formatPercent(kpis.data.revenue_uplift) : null}
           context="vs baseline"
           isLoading={kpis.isLoading}
           isError={kpis.isError}
-          emptyHint="Run actl growth to generate session data"
+          emptyHint={`Not enough completed sessions to compare yet (need ${MIN_SESSIONS_PER_ARM}+ per arm)`}
         />
         <KpiCard
-          label="Conversion"
+          label="Conversion (simulated)"
           value={hasGrowthData && kpis.data ? formatPercent(kpis.data.upsell.conversion_rate) : null}
           context={hasGrowthData && kpis.data ? `vs ${formatPercent(kpis.data.baseline.conversion_rate)} baseline` : undefined}
           isLoading={kpis.isLoading}
           isError={kpis.isError}
+          emptyHint={`Not enough completed sessions to compare yet (need ${MIN_SESSIONS_PER_ARM}+ per arm)`}
         />
         <KpiCard
-          label="Avg order value"
+          label="Avg order value (simulated)"
           value={
             hasGrowthData && kpis.data?.upsell.aov_minor != null
               ? formatMinor(kpis.data.upsell.aov_minor)
@@ -79,9 +83,10 @@ export function OverviewSection() {
           }
           isLoading={kpis.isLoading}
           isError={kpis.isError}
+          emptyHint={`Not enough completed sessions to compare yet (need ${MIN_SESSIONS_PER_ARM}+ per arm)`}
         />
         <KpiCard
-          label="Upsell attach"
+          label="Upsell attach (simulated)"
           value={
             hasGrowthData && kpis.data?.upsell.attach_rate != null
               ? formatPercent(kpis.data.upsell.attach_rate)
@@ -90,6 +95,7 @@ export function OverviewSection() {
           context="of upsell offers"
           isLoading={kpis.isLoading}
           isError={kpis.isError}
+          emptyHint={`Not enough completed sessions to compare yet (need ${MIN_SESSIONS_PER_ARM}+ per arm)`}
         />
         <KpiCard
           label="Protected offers blocked"
@@ -98,6 +104,56 @@ export function OverviewSection() {
           isLoading={kpis.isLoading}
           isError={kpis.isError}
         />
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-base font-semibold text-navy-900">Real upsell activity</h2>
+        <p className="mb-3 -mt-2 text-xs text-navy-500">
+          Real buyer-driven post-booking add-on purchases -- separate from the simulated growth
+          arms above, never blended into that comparison.
+        </p>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          <KpiCard
+            label="Offered"
+            value={kpis.data ? String(kpis.data.real_upsell.offered) : null}
+            context="eligible offers shown"
+            isLoading={kpis.isLoading}
+            isError={kpis.isError}
+          />
+          <KpiCard
+            label="Accepted"
+            value={kpis.data ? String(kpis.data.real_upsell.accepted) : null}
+            context="buyer approved"
+            isLoading={kpis.isLoading}
+            isError={kpis.isError}
+          />
+          <KpiCard
+            label="Settled"
+            value={kpis.data ? String(kpis.data.real_upsell.settled) : null}
+            context="paid successfully"
+            isLoading={kpis.isLoading}
+            isError={kpis.isError}
+          />
+          <KpiCard
+            label="Attach rate"
+            value={
+              kpis.data?.real_upsell.attach_rate != null
+                ? formatPercent(kpis.data.real_upsell.attach_rate)
+                : null
+            }
+            context="settled / offered"
+            isLoading={kpis.isLoading}
+            isError={kpis.isError}
+            emptyHint="No offers shown yet"
+          />
+          <KpiCard
+            label="Organic gross sales"
+            value={kpis.data ? formatMinor(kpis.data.organic.gross_sales_minor) : null}
+            context={kpis.data ? `${kpis.data.organic.orders} completed orders` : undefined}
+            isLoading={kpis.isLoading}
+            isError={kpis.isError}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">

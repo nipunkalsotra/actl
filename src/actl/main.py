@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from actl.config import settings
 from actl.infrastructure.llm.factory import build_llm_client
+from actl.infrastructure.llm.health import LLMHealth
 from actl.infrastructure.providers.factory import build_payment_provider
 from actl.interfaces.agent import routes as agent_routes
 from actl.interfaces.http.routers import admin, audit, buyer, catalog, growth, merchant, well_known
@@ -49,11 +50,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # routers via request.app.state; falls back to NullLLMClient/
     # ReplayLLMClient per LLM_ENABLED/DEMO_REPLAY exactly like the CLI/worker.
     app.state.llm_breaker = CircuitBreaker(name="groq", clock=SystemClock())
+    # Read by /buyer/v1/config's llm_status (via get_llm_health, deps.py) --
+    # a plain in-process flag the adapter flips on its own first real
+    # success, never a new network call of its own (§ narrow follow-up:
+    # "groq_healthy" must mean an actual successful request happened, not
+    # merely that LLM_ENABLED=true and a key is present).
+    app.state.llm_health = LLMHealth()
     app.state.llm_client = build_llm_client(
         settings,
         redis_client=app.state.redis_client,
         breaker=app.state.llm_breaker,
         clock=SystemClock(),
+        health=app.state.llm_health,
     )
     logger.info("app.startup", app_env=settings.app_env)
     try:

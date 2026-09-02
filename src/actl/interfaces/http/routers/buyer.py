@@ -27,14 +27,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from actl.application.agents import merchant
 from actl.application.agents.merchant import HandlerError, handle_order_propose
-from actl.application.catalog_service import CatalogQuery, list_catalog
+from actl.application.catalog_service import CatalogQuery, create_quote, list_catalog
 from actl.application.conversation.extraction import extract_mandate_draft
 from actl.application.conversation.ranking import rank_candidates
 from actl.application.explain_service import OrderNotFoundForExplain, explain_order
 from actl.application.orchestrator import saga
 from actl.application.ports import LLMClient, PaymentProvider
+from actl.application.upsell_service import list_eligible_offers, price_offer_for_purchase
 from actl.config import settings
-from actl.domain.mandate.draft import ClarificationNeeded
+from actl.domain.mandate.draft import ClarificationNeeded, MandateDraftSlots
 from actl.domain.mandate.hashing import compute_spec_hash
 from actl.domain.mandate.models import (
     Delegate,
@@ -50,10 +51,12 @@ from actl.domain.mandate.signing import sign_spec_hash
 from actl.domain.mandate.state_machine import MandateStatus
 from actl.domain.policy.rules import PurchaseIntent, compute_intent_hash
 from actl.infrastructure.db.uow import UnitOfWork
+from actl.infrastructure.llm.health import LLMHealth
 from actl.interfaces.http.deps import (
     get_breaker,
     get_clock,
     get_llm_client,
+    get_llm_health,
     get_payment_provider,
     get_session_factory,
     get_uow,
@@ -71,18 +74,31 @@ _CATEGORY = "travel.hotel"
 
 
 @router.get("/buyer/v1/config")
-async def get_config() -> dict[str, Any]:
+async def get_config(health: LLMHealth = Depends(get_llm_health)) -> dict[str, Any]:
     """Non-secret, public config only -- `razorpay_key_id` is the
     published, embed-in-client-side-checkout.js identifier Razorpay's own
     model treats as public; the matching key *secret* never leaves
-    `config.py`/the payment adapter."""
+    `config.py`/the payment adapter.
+
+    `llm_status` never claims Groq is available merely because
+    LLM_ENABLED=true and a key is configured -- "groq_healthy" requires
+    `health.succeeded_once`, set only after a real request the adapter
+    itself already made actually completed (never a health check added
+    here; this route makes no LLM call of its own)."""
     is_razorpay = settings.payment_provider == "razorpay"
+    if not settings.llm_enabled:
+        llm_status = "deterministic"
+    elif health.succeeded_once:
+        llm_status = "groq_healthy"
+    else:
+        llm_status = "groq_configured"
     return {
         "currency": "INR",
         "location": _GOA_LOCATION,
         "payment_provider": settings.payment_provider,
         "razorpay_key_id": settings.razorpay_key_id if is_razorpay else None,
         "quote_ttl_s": settings.quote_ttl_s,
+        "llm_status": llm_status,
     }
 
 
@@ -136,6 +152,24 @@ class ExtractRequest(BaseModel):
     conversation_text: str = Field(min_length=1, max_length=4000)
 
 
+def _serialize_slots(slots: MandateDraftSlots) -> dict[str, Any]:
+    """Shared by both extract_mandate branches so a partial draft
+    (clarification_needed) and a complete one (draft_ready) expose the
+    same shape -- the browser needs "what's already understood" either
+    way to render a progressive acknowledgement instead of a static
+    all-fields prompt."""
+    return {
+        "category": slots.category,
+        "location": slots.location,
+        "check_in": slots.check_in,
+        "nights": slots.nights,
+        "rooms": slots.rooms,
+        "currency": slots.currency,
+        "guests": slots.guests,
+        "refundable": slots.refundable,
+    }
+
+
 @router.post("/buyer/v1/mandate/extract")
 async def extract_mandate(
     body: ExtractRequest, llm: LLMClient = Depends(get_llm_client)
@@ -150,19 +184,14 @@ async def extract_mandate(
             "status": "clarification_needed",
             "missing_slots": list(result.missing_slots),
             "questions": list(result.questions),
+            "slots": _serialize_slots(result.slots),
+            "max_total_minor": result.max_total_minor,
         }
     return {
         "status": "draft_ready",
         "max_total_minor": result.max_total_minor,
         "max_unit_minor": result.max_unit_minor,
-        "slots": {
-            "category": result.slots.category,
-            "location": result.slots.location,
-            "check_in": result.slots.check_in,
-            "nights": result.slots.nights,
-            "rooms": result.slots.rooms,
-            "currency": result.slots.currency,
-        },
+        "slots": _serialize_slots(result.slots),
     }
 
 
@@ -397,3 +426,263 @@ async def buyer_explain(order_id: str, uow: UnitOfWork = Depends(get_uow)) -> di
             status_code=404, detail={"reason_code": "ORDER_NOT_FOUND", "order_id": order_id}
         ) from None
     return render_explain_result(result)
+
+
+# ---------------------------------------------------------------------------
+# §28 P12 contextual upsell: real, buyer-driven post-booking add-on offers.
+# Eligibility/pricing is 100% deterministic (application.upsell_service,
+# no LLM call); a purchase always mints a brand-new, narrowly-scoped
+# mandate and runs the exact same real quote -> gate -> saga -> ledger ->
+# payment pipeline every other purchase in this app uses -- the settled
+# base mandate is never reused (§9.1's SETTLED status is terminal; the
+# gate's own G1 check would refuse it regardless).
+# ---------------------------------------------------------------------------
+
+
+def _serialize_offer(offer: Any) -> dict[str, Any]:
+    return {
+        "sku": offer.sku,
+        "title": offer.title,
+        "unit_price_minor": offer.unit_price_minor,
+        "total_minor": offer.total_minor,
+        "currency": offer.currency,
+        "refundable": offer.refundable,
+        "quantity_description": offer.quantity_description,
+    }
+
+
+@router.get("/buyer/v1/upsell/offers")
+async def get_upsell_offers(
+    order_id: Annotated[str, Query(min_length=1, pattern=_NO_NUL_BYTES)],
+    uow: UnitOfWork = Depends(get_uow),
+) -> dict[str, Any]:
+    """Deterministic eligibility from real data only: the base order must
+    be a settled travel.hotel purchase, each candidate add-on must have
+    real available_units, and any add-on already purchased/declined for
+    this exact base order is excluded (no duplicate offer, let alone
+    duplicate purchase). Never returns a fabricated offer, and never
+    calls an LLM -- an empty `offers` list is a legitimate, honest
+    answer, not a degraded one."""
+    result = await list_eligible_offers(uow, base_order_id=order_id)
+    if result is None:
+        return {"base_order_id": order_id, "currency": "INR", "offers": []}
+    currency, offers = result
+    return {
+        "base_order_id": order_id,
+        "currency": currency,
+        "offers": [_serialize_offer(o) for o in offers],
+    }
+
+
+class UpsellDeclineRequest(BaseModel):
+    base_order_id: str = Field(min_length=1, pattern=_NO_NUL_BYTES)
+
+
+@router.post("/buyer/v1/upsell/decline")
+async def decline_upsell(
+    body: UpsellDeclineRequest, uow: UnitOfWork = Depends(get_uow)
+) -> dict[str, Any]:
+    """"No thanks" -- persists a non-sensitive analytics-only state
+    change (offered -> declined) so the buyer is never asked again this
+    session; never money-moving, never blocks anything."""
+    await uow.addon_purchases.decline_all_offered(body.base_order_id)
+    await uow.commit()
+    return {"status": "declined"}
+
+
+class UpsellPurchaseRequest(BaseModel):
+    base_order_id: str = Field(min_length=1, pattern=_NO_NUL_BYTES)
+    offer_sku: str = Field(min_length=1, pattern=_NO_NUL_BYTES)
+
+
+@router.post("/buyer/v1/upsell/purchase")
+async def purchase_upsell(
+    body: UpsellPurchaseRequest,
+    clock: Clock = Depends(get_clock),
+    session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
+    provider: PaymentProvider = Depends(get_payment_provider),
+    breaker: CircuitBreaker = Depends(get_breaker),
+) -> dict[str, Any]:
+    """The buyer's deliberate "Approve" click on the separate review step
+    -- never reachable merely by viewing offers. Price is always
+    recomputed here from the live catalog, never taken from the request
+    body. Builds and locks a brand-new mandate scoped to only this one
+    add-on category (`allowed_categories=[offer.category]`), then runs
+    the real create_quote -> handle_order_propose (gate) ->
+    saga.complete_purchase pipeline unmodified. The addon_purchases row's
+    UNIQUE(base_order_id, offer_sku) constraint makes a concurrent
+    duplicate attempt (two clicks, two tabs) fail closed before any
+    mandate is even built."""
+    now = clock.now()
+    trace_id = new_id("trc")
+    addon_mandate_id = new_id("mdt")
+    addon_purchase_id = new_id("adp")
+
+    async with UnitOfWork(session_factory) as uow:
+        offer = await price_offer_for_purchase(
+            uow, base_order_id=body.base_order_id, offer_sku=body.offer_sku
+        )
+        if offer is None:
+            raise HTTPException(status_code=409, detail={"reason_code": "OFFER_NOT_AVAILABLE"})
+
+        got_lock = await uow.addon_purchases.try_mark_pending(
+            id=addon_purchase_id,
+            base_order_id=body.base_order_id,
+            offer_sku=body.offer_sku,
+            addon_mandate_id=addon_mandate_id,
+            price_minor=offer.total_minor,
+            currency=offer.currency,
+        )
+        if not got_lock:
+            raise HTTPException(status_code=409, detail={"reason_code": "ALREADY_PURCHASED"})
+
+        draft = Mandate(
+            mandate_id=addon_mandate_id,
+            version=1,
+            principal=Principal(type="human", id="usr_web_buyer"),
+            delegate=Delegate(type="agent", id="agt_web_buyer", key_id="ed25519:web-buyer"),
+            intent=MandateIntent(
+                category=offer.category,
+                location=_GOA_LOCATION,
+                check_in="addon",
+                nights=offer.quantity,
+                rooms=1,
+            ),
+            bounds=MandateBounds(
+                currency=offer.currency,
+                max_total_minor=offer.total_minor,
+                max_unit_minor=max(offer.total_minor // offer.quantity, 1),
+                max_transactions=1,
+                allowed_categories=[offer.category],
+                blocked_merchants=[],
+                require_refundable=offer.refundable,
+                max_price_delta_bps=1000,
+            ),
+            temporal=MandateTemporal(
+                not_before=now,
+                expires_at=now + timedelta(seconds=settings.mandate_default_ttl_s),
+                quote_ttl_s=settings.quote_ttl_s,
+            ),
+            controls=MandateControls(human_confirm_required=True, revocable=True),
+        )
+        spec_hash = compute_spec_hash(draft)
+        signature = MandateSignature(
+            alg="HMAC-SHA256",
+            key_id="mk_web_buyer",
+            value=sign_spec_hash(spec_hash, settings.mandate_signing_key.encode("utf-8")),
+        )
+        mandate = draft.model_copy(update={"spec_hash": spec_hash, "signature": signature})
+        await uow.mandates.add(mandate, MandateStatus.LOCKED)
+
+        quote = await create_quote(
+            uow,
+            clock,
+            mandate_id=mandate.mandate_id,
+            sku=body.offer_sku,
+            nights=offer.quantity,
+            actor_id="web_buyer",
+        )
+        await uow.commit()
+
+    # Same PurchaseIntent construction propose_order/demo.py use -- every
+    # field sourced from this merchant's own quote/mandate/catalog
+    # records, never from anything the browser claims.
+    async with UnitOfWork(session_factory) as uow:
+        item = await uow.catalog.get_item(quote.sku)
+        assert item is not None  # just created the quote from this same sku
+    intent_draft = PurchaseIntent(
+        currency=mandate.bounds.currency,
+        category=item.category,
+        merchant=item.merchant_id,
+        unit_price_minor=quote.unit_price_minor,
+        total_minor=quote.total_minor,
+        nights=quote.nights,
+        rooms=mandate.intent.rooms,
+        refundable=quote.refundable,
+        quoted_total_minor=quote.total_minor,
+        current_total_minor=item.unit_price_minor * quote.nights,
+        catalog_version=quote.catalog_version,
+        mandate_spec_hash=mandate.spec_hash or "",
+        intent_hash="",
+    )
+    intent_hash = compute_intent_hash(intent_draft)
+
+    outcome = await handle_order_propose(
+        session_factory,
+        provider,
+        clock,
+        breaker,
+        quote_id=quote.quote_id,
+        quote_hash=quote.quote_hash or "",
+        mandate_id=mandate.mandate_id,
+        mandate_spec_hash=mandate.spec_hash or "",
+        intent_hash=intent_hash,
+        trace_id=trace_id,
+        actor_id="web_buyer",
+    )
+    propose_body = dict(outcome.body)
+    if propose_body.get("decision") != "accept":
+        async with UnitOfWork(session_factory) as uow:
+            await uow.addon_purchases.mark_failed(
+                base_order_id=body.base_order_id, offer_sku=body.offer_sku
+            )
+            await uow.commit()
+        return {
+            "decision": "reject",
+            "reason_code": propose_body.get("reason_code"),
+            "addon_order_id": None,
+        }
+
+    order_id = str(propose_body["order_id"])
+    saga_id = str(propose_body["saga_id"])
+
+    async with UnitOfWork(session_factory) as uow:
+        order = await uow.orders.get(order_id)
+    if order is None or order.provider_order_id is None:
+        async with UnitOfWork(session_factory) as uow:
+            await uow.addon_purchases.mark_failed(
+                base_order_id=body.base_order_id, offer_sku=body.offer_sku
+            )
+            await uow.commit()
+        raise HTTPException(status_code=409, detail={"reason_code": "ORDER_NOT_READY"})
+
+    build_checkout_payload = getattr(provider, "build_checkout_payload", None)
+    payments = await provider.fetch_payments(order.provider_order_id)
+    if not payments or build_checkout_payload is None:
+        async with UnitOfWork(session_factory) as uow:
+            await uow.addon_purchases.mark_failed(
+                base_order_id=body.base_order_id, offer_sku=body.offer_sku
+            )
+            await uow.commit()
+        raise HTTPException(status_code=409, detail={"reason_code": "PAYMENT_NOT_READY"})
+    payment = payments[0]
+    signature_payload = build_checkout_payload(order.provider_order_id, payment.id)
+
+    snapshot = await saga.complete_purchase(
+        saga_id,
+        session_factory,
+        provider,
+        clock,
+        breaker,
+        provider_order_id=order.provider_order_id,
+        provider_payment_id=payment.id,
+        provider_signature=signature_payload,
+        actor_id="web_buyer",
+    )
+
+    async with UnitOfWork(session_factory) as uow:
+        if snapshot.status == "COMPLETED":
+            await uow.addon_purchases.mark_settled(
+                base_order_id=body.base_order_id, offer_sku=body.offer_sku, addon_order_id=order_id
+            )
+        else:
+            await uow.addon_purchases.mark_failed(
+                base_order_id=body.base_order_id, offer_sku=body.offer_sku
+            )
+        await uow.commit()
+
+    return {
+        "decision": "accept" if snapshot.status == "COMPLETED" else "reject",
+        "reason_code": str(snapshot.reason_code) if snapshot.reason_code else None,
+        "addon_order_id": order_id if snapshot.status == "COMPLETED" else None,
+    }

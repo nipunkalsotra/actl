@@ -69,7 +69,10 @@ async def list_orders(
     uow: UnitOfWork = Depends(get_uow),
 ) -> dict[str, Any]:
     """Order id / SKU / amount / status only -- no buyer name or other PII
-    (§18.2's `orders` table never stores one)."""
+    (§18.2's `orders` table never stores one). `source` is null for a real
+    organic order, or 'demo_lab'/'growth_simulation' for a guarded
+    scenario/seeded session (migration 0010) -- the frontend badges those
+    distinctly so they are never presented as organic customer growth."""
     orders = await uow.orders.list_recent(limit)
     items: list[dict[str, Any]] = []
     for order in orders:
@@ -82,6 +85,7 @@ async def list_orders(
                 "currency": order.currency,
                 "status": order.status,
                 "decline_reason": order.decline_reason,
+                "source": order.source,
                 "created_at": order.created_at.isoformat() if order.created_at else None,
             }
         )
@@ -130,16 +134,44 @@ def _arm_json(arm: ArmMetrics) -> dict[str, Any]:
 @router.get("/merchant/v1/kpis")
 async def get_kpis(uow: UnitOfWork = Depends(get_uow)) -> dict[str, Any]:
     """Same real `compute_growth_metrics` computation `/metrics/growth`
-    already serves (§28 P8), plus the one KPI that service doesn't cover:
-    a real count of policy decisions the Money Action Gate actually denied
-    -- "protected offers blocked", never a fabricated number."""
+    already serves (§28 P8) -- baseline/upsell here are the *synthetic*
+    growth-simulator's A/B arms (`actl growth`), deliberately kept
+    separate from `real_upsell` below (real buyer behaviour must never be
+    blended into a synthetic experiment comparison). `protected_offers_
+    blocked` is a real count of policy decisions the Money Action Gate
+    actually denied. `organic` excludes any order tagged non-organic
+    (Demo Lab / growth simulation, migration 0010) from gross sales."""
     metrics = await compute_growth_metrics(uow)
     protected_offers_blocked = await uow.decisions.count_denied()
+
+    offered = await uow.addon_purchases.count_all()
+    accepted = await uow.addon_purchases.count_by_statuses(("pending", "settled", "failed"))
+    settled = await uow.addon_purchases.count_by_status("settled")
+    declined = await uow.addon_purchases.count_by_status("declined")
+    settled_revenue_minor = await uow.addon_purchases.sum_price_minor_by_status("settled")
+    attach_rate = (settled / offered) if offered > 0 else None
+
+    organic_orders, organic_gross_sales_minor = await uow.orders.count_and_sum_captured(
+        organic_only=True
+    )
+
     return {
         "baseline": _arm_json(metrics.baseline),
         "upsell": _arm_json(metrics.upsell),
         "revenue_uplift": metrics.revenue_uplift,
         "protected_offers_blocked": protected_offers_blocked,
+        "real_upsell": {
+            "offered": offered,
+            "accepted": accepted,
+            "settled": settled,
+            "declined": declined,
+            "attach_rate": attach_rate,
+            "settled_revenue_minor": settled_revenue_minor,
+        },
+        "organic": {
+            "orders": organic_orders,
+            "gross_sales_minor": organic_gross_sales_minor,
+        },
     }
 
 

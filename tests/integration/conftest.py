@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 from testcontainers.community.postgres import PostgresContainer
 from testcontainers.community.redis import RedisContainer
 
@@ -63,9 +64,19 @@ def postgres_url() -> Iterator[str]:
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def engine(postgres_url: str) -> AsyncIterator[AsyncEngine]:
-    # Generous pool: tests/integration/audit's 200-parallel-append test needs
-    # real concurrent connections, not a queue in front of a small pool.
-    eng = create_async_engine(postgres_url, pool_size=50, max_overflow=200)
+    # NullPool: individual test functions run on pytest-asyncio's default
+    # function-scoped event loop (this fixture's own loop_scope="session"
+    # only governs this fixture's own setup/teardown), so a connection
+    # checked out by one test and returned to a real pool would get handed
+    # to a later test's *different* loop -- asyncpg raises "Future attached
+    # to a different loop" (the same class of bug ADR 0005 decision 12 hit
+    # and fixed for TestClient's engine). NullPool opens a fresh connection
+    # per checkout and closes it on checkin, so no connection ever crosses
+    # a loop boundary; tests/integration/audit's 200-parallel-append test
+    # still gets 200 real simultaneous connections (max_connections=300 is
+    # already provisioned for that), just never a cached one from a dead
+    # loop.
+    eng = create_async_engine(postgres_url, poolclass=NullPool)
     yield eng
     await eng.dispose()
 

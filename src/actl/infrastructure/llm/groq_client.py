@@ -8,6 +8,15 @@ circuit breaker -> the real Groq API call -> cache write. Any failure at
 any stage raises `LLMUnavailable` -- never a raw groq/Redis exception --
 so application code has exactly one failure mode to react to (§17.2), and
 the money path never depends on Groq's own exception hierarchy.
+
+Never logs (here, or in the sanitized `LLMUnavailable` message a caller
+might see): the Authorization header, GROQ_API_KEY, a raw prompt, or
+Groq's full error body (`error.message` can echo request fragments back,
+per Groq's own docs at console.groq.com/docs/errors) -- only the HTTP
+status, Groq's own short `error.type` classification (e.g.
+"invalid_request_error"), and the configured (non-secret) model id, same
+spirit as `infrastructure/providers/razorpay/adapter.py`'s
+`_safe_error_body`.
 """
 
 from __future__ import annotations
@@ -21,9 +30,28 @@ from actl.application.ports import LLMUnavailable
 from actl.infrastructure.cache.rate_limit import RateLimitUnavailable, TokenBucketLimiter
 from actl.infrastructure.cache.semantic_cache import SemanticCache
 from actl.infrastructure.llm.canonical_prompt import canonical_prompt_key
+from actl.infrastructure.llm.health import LLMHealth
 from actl.platform import metrics
 from actl.platform.breaker import CircuitBreaker
 from actl.platform.errors import CircuitOpenError
+from actl.platform.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+def _sanitized_error_type(exc: APIError) -> str | None:
+    """Groq's documented error body is `{"error": {"message", "type"}}` --
+    `type` is a short classification (e.g. "invalid_request_error"), safe
+    to log. `message` is free text that can include request fragments, so
+    it is deliberately never read here."""
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        error = body.get("error")
+        if isinstance(error, dict):
+            error_type = error.get("type")
+            if isinstance(error_type, str):
+                return error_type
+    return None
 
 
 class GroqClient:
@@ -36,12 +64,14 @@ class GroqClient:
         breaker: CircuitBreaker,
         limiter: TokenBucketLimiter,
         cache: SemanticCache,
+        health: LLMHealth | None = None,
     ) -> None:
         self._client = AsyncGroq(api_key=api_key, timeout=timeout_s)
         self._model = model
         self._breaker = breaker
         self._limiter = limiter
         self._cache = cache
+        self._health = health or LLMHealth()
 
     async def complete_json(self, *, system: str, user: str, max_tokens: int) -> dict[str, object]:
         result = await self._complete(mode="json", system=system, user=user, max_tokens=max_tokens)
@@ -90,8 +120,20 @@ class GroqClient:
 
         try:
             result = await self._breaker.call(_call)
-        except (CircuitOpenError, APIError, json.JSONDecodeError, ValueError) as exc:
+        except CircuitOpenError as exc:
+            raise LLMUnavailable(str(exc)) from exc
+        except APIError as exc:
+            status = getattr(exc, "status_code", None)
+            error_type = _sanitized_error_type(exc)
+            logger.warning(
+                "groq.request_failed", status=status, error_type=error_type, model=self._model
+            )
+            raise LLMUnavailable(
+                f"Groq API error (status={status}, type={error_type})"
+            ) from exc
+        except (json.JSONDecodeError, ValueError) as exc:
             raise LLMUnavailable(str(exc)) from exc
 
+        self._health.mark_success()
         await self._cache.set(cache_key, result)
         return result

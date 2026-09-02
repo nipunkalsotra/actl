@@ -10,7 +10,6 @@ import { HotelDetailsDrawer } from "../components/HotelDetailsDrawer";
 import { MandateCard } from "../components/MandateCard";
 import { MobileFiltersSheet } from "../components/MobileFiltersSheet";
 import { MyTripsDrawer } from "../components/MyTripsDrawer";
-import { ProofDrawer } from "../components/ProofDrawer";
 import { QuoteDrawer } from "../components/QuoteDrawer";
 import { StickyTripBar } from "../components/StickyTripBar";
 import { TrustStrip } from "../components/TrustStrip";
@@ -53,7 +52,6 @@ function BuyerShell() {
 
       <HotelDetailsDrawer />
       <QuoteDrawer />
-      <ProofDrawer />
       <MyTripsDrawer open={tripsOpen} onClose={() => setTripsOpen(false)} />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
