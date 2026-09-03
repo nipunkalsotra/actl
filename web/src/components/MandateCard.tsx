@@ -23,7 +23,7 @@ export function MandateCard({ onOpenChat }: MandateCardProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-card">
+    <div className="rounded-2xl border border-sky-100 bg-card p-5 shadow-card">
       <h2 className="mb-4 text-base font-semibold text-navy-900">Your travel mandate</h2>
 
       <dl className="space-y-2.5 text-sm">

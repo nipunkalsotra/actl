@@ -72,7 +72,7 @@ export function LiveOrdersSection({ onOpenOrder }: LiveOrdersSectionProps) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by order reference or SKU…"
-            className="w-full rounded-full border border-sky-100 bg-white py-2 pl-9 pr-3 text-sm text-navy-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ocean-500"
+            className="w-full rounded-full border border-sky-100 bg-card py-2 pl-9 pr-3 text-sm text-navy-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ocean-500"
           />
         </label>
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by trust status">
@@ -82,7 +82,7 @@ export function LiveOrdersSection({ onOpenOrder }: LiveOrdersSectionProps) {
               type="button"
               onClick={() => setFilter(f)}
               className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                filter === f ? "bg-ocean-600 text-white" : "bg-white text-navy-700 shadow-card hover:bg-sky-50"
+                filter === f ? "bg-ocean-600 text-white" : "bg-card text-navy-700 shadow-card hover:bg-sky-50"
               }`}
             >
               {f}
@@ -94,7 +94,7 @@ export function LiveOrdersSection({ onOpenOrder }: LiveOrdersSectionProps) {
       {orders.isLoading && (
         <div className="space-y-2">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-14 animate-pulse rounded-xl bg-white shadow-card" />
+            <div key={i} className="h-14 animate-pulse rounded-xl bg-card shadow-card" />
           ))}
         </div>
       )}
@@ -106,13 +106,13 @@ export function LiveOrdersSection({ onOpenOrder }: LiveOrdersSectionProps) {
       )}
 
       {!orders.isLoading && !orders.isError && filtered.length === 0 && (
-        <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center text-sm text-navy-500 shadow-card">
+        <div className="rounded-2xl border border-sky-100 bg-card p-8 text-center text-sm text-navy-500 shadow-card">
           No orders match your search.
         </div>
       )}
 
       {!orders.isLoading && filtered.length > 0 && (
-        <div className="overflow-x-auto rounded-2xl border border-sky-100 bg-white shadow-card">
+        <div className="overflow-x-auto rounded-2xl border border-sky-100 bg-card shadow-card">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead>
               <tr className="border-b border-sky-100 text-xs font-semibold uppercase tracking-wide text-navy-500">

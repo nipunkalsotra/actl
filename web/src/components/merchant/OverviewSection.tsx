@@ -44,7 +44,7 @@ export function OverviewSection() {
             type="button"
             onClick={() => kpis.refetch()}
             disabled={kpis.isFetching}
-            className="flex items-center gap-1.5 rounded-full border border-sky-100 bg-white px-3 py-1.5 font-medium text-navy-700 hover:bg-sky-50 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full border border-sky-100 bg-card px-3 py-1.5 font-medium text-navy-700 hover:bg-sky-50 disabled:opacity-60"
           >
             <RefreshCw size={13} className={kpis.isFetching ? "animate-spin" : undefined} />
             Refresh
@@ -160,7 +160,7 @@ export function OverviewSection() {
         <div>
           <h2 className="mb-3 text-base font-semibold text-navy-900">ACTL growth impact</h2>
           {kpis.isLoading ? (
-            <div className="h-64 animate-pulse rounded-2xl bg-white shadow-card" />
+            <div className="h-64 animate-pulse rounded-2xl bg-card shadow-card" />
           ) : kpis.data ? (
             <GrowthChart baseline={kpis.data.baseline} upsell={kpis.data.upsell} />
           ) : (
@@ -170,7 +170,7 @@ export function OverviewSection() {
           )}
         </div>
 
-        <div className="flex flex-col items-center justify-between rounded-2xl border border-sky-100 bg-white p-6 text-center shadow-card">
+        <div className="flex flex-col items-center justify-between rounded-2xl border border-sky-100 bg-card p-6 text-center shadow-card">
           <span className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100">
             <ShieldCheck size={36} className="text-emerald-600" />
           </span>

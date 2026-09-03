@@ -1,39 +1,157 @@
 @import "tailwindcss";
 
+/* ============================================================================
+   Theme tokens
+   ----------------------------------------------------------------------------
+   Two layers:
+   1. Raw color primitives (--raw-*), one full set per theme, swapped via the
+      [data-theme] attribute that index.html's pre-paint script and
+      state/theme.tsx's ThemeProvider both keep in sync with localStorage /
+      prefers-color-scheme.
+   2. Tailwind-facing tokens (--color-*) inside @theme, which just alias the
+      raw primitives. Every existing component class (bg-sky-50, text-navy-900,
+      bg-ocean-600, ...) is therefore theme-reactive automatically -- no
+      per-component dark: variants scattered through the app.
+
+   Solid fills that pair a color with white text (bg-ocean-600, bg-coral-500/
+   600) intentionally use the same hex in both themes -- white-on-fill
+   contrast doesn't depend on what page surrounds the button, so there's
+   nothing for a dark-mode override to fix. coral-500/600 (warning-hover/
+   warning) are #c23e1a/#96290e specifically because white text needs
+   4.5:1 against the *default* (not just hover) fill: #ffffff on #c23e1a is
+   5.25:1, #ffffff on #96290e is 8.01:1, same hue (H12-13) and saturation
+   as the original coral, just darker. Where the same hue is also used as
+   small standalone text/icon color, a brighter dedicated shade (ocean-400,
+   coral-400) exists instead of overloading the fill color with two
+   conflicting contrast requirements.
+
+   success (emerald-600 light) is #0a6e4c, not the original #0e9f6e --
+   #0e9f6e only cleared 3.4:1 on white and 3:1 on its own emerald-100 tint
+   (a real, pre-existing gap, not something dark mode introduced); #0a6e4c
+   clears >=5.4:1 against white, card, emerald-100, and sky-100 alike,
+   same hue (H160) just deeper, matching the deep-text-on-pale-tint shape
+   coral-700/coral-100 already uses.
+
+   navy-400/navy-300 (text-tertiary/text-placeholder) and coral-700/coral-50
+   (warning-strong/warning-soft-tint) are real, load-bearing tokens, not
+   leftovers -- navy-400 is a small caption's color, navy-300 is a large
+   (24px) empty-state placeholder dash so it only needs the 3:1 large-text
+   floor, and coral-700/coral-50 are a stronger warning-text shade and its
+   matching pale chip background, both re-verified against every surface
+   they actually render on (card, page, their own paired tint) in both
+   themes.
+   ============================================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* ---- light theme (default; unchanged from the original palette) ---- */
+  --raw-page: #eef6fd;
+  --raw-elevated: #e1f0fc;
+  --raw-card: #ffffff;
+  --raw-text-primary: #0e2a44;
+  --raw-text-secondary: #1c3f5f;
+  --raw-text-muted: #4c6884;
+  --raw-text-tertiary: #5b7086;
+  --raw-text-placeholder: #7890a5;
+  --raw-action: #1c6fd9;
+  --raw-action-hover: #2c82ee;
+  --raw-action-tint: #dceafd;
+  --raw-action-text: #1c6fd9;
+  --raw-warning: #96290e;
+  --raw-warning-hover: #c23e1a;
+  --raw-warning-tint: #fde3da;
+  --raw-warning-soft-tint: #fdf1ec;
+  --raw-warning-text: #e35431;
+  --raw-warning-strong: #a83a1f;
+  --raw-success: #0a6e4c;
+  --raw-success-hover: #16b981;
+  --raw-success-tint: #d9f7ec;
+  --raw-ink: #0e2a44;
+  --raw-ink-hover: #1c3f5f;
+  --raw-on-ink: #ffffff;
+  --raw-overlay: #0e2a44;
+  --raw-shadow-rgb: 14, 42, 68;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ---- dark theme ----
+     Deep midnight navy canvas, never pure black. Surfaces get progressively
+     lighter as they lift off the page (page < elevated tint < card),
+     mirroring the light theme's own page < tint < white-card ordering. */
+  --raw-page: #0b1a2b;
+  --raw-elevated: #15293f;
+  --raw-card: #1a2f47;
+  --raw-text-primary: #eef3f8;
+  --raw-text-secondary: #c3d1e0;
+  --raw-text-muted: #93a6ba;
+  --raw-text-tertiary: #8ea3b8;
+  --raw-text-placeholder: #6e84a0;
+  --raw-action: #1c6fd9;
+  --raw-action-hover: #2c82ee;
+  --raw-action-tint: #123048;
+  --raw-action-text: #5b9df5;
+  --raw-warning: #96290e;
+  --raw-warning-hover: #c23e1a;
+  --raw-warning-tint: #200c08;
+  --raw-warning-soft-tint: #180907;
+  --raw-warning-text: #f99d8b;
+  --raw-warning-strong: #ff9376;
+  --raw-success: #34d399;
+  --raw-success-hover: #16b981;
+  --raw-success-tint: #0f2c22;
+  --raw-ink: #e7edf5;
+  --raw-ink-hover: #cdd8e4;
+  --raw-on-ink: #0e2a44;
+  --raw-overlay: #050d16;
+  --raw-shadow-rgb: 0, 0, 0;
+}
+
 @theme {
-  /* Bright premium travel-commerce palette -- pale sky-blue/white ground,
-     deep navy text, ocean-blue primary actions, warm coral CTA, emerald
-     success/trust states. Never a dark fintech-dashboard look. */
-  --color-sky-50: #eef6fd;
-  --color-sky-100: #e1f0fc;
+  /* Existing palette names -- every current bg-sky-50, text-navy-900,
+     bg-ocean-600 etc. class across the app keeps working unchanged and
+     becomes theme-reactive via this indirection. */
+  --color-sky-50: var(--raw-page);
+  --color-sky-100: var(--raw-elevated);
+  --color-card: var(--raw-card);
 
-  --color-navy-900: #0e2a44;
-  --color-navy-700: #1c3f5f;
-  --color-navy-500: #4c6884;
+  --color-navy-900: var(--raw-text-primary);
+  --color-navy-700: var(--raw-text-secondary);
+  --color-navy-500: var(--raw-text-muted);
+  --color-navy-400: var(--raw-text-tertiary);
+  --color-navy-300: var(--raw-text-placeholder);
 
-  --color-ocean-600: #1c6fd9;
-  --color-ocean-500: #2c82ee;
-  --color-ocean-100: #dceafd;
+  --color-ocean-600: var(--raw-action);
+  --color-ocean-500: var(--raw-action-hover);
+  --color-ocean-100: var(--raw-action-tint);
+  --color-ocean-400: var(--raw-action-text);
 
-  --color-coral-600: #e35431;
-  --color-coral-500: #f2653e;
-  --color-coral-100: #fde3da;
+  --color-coral-600: var(--raw-warning);
+  --color-coral-500: var(--raw-warning-hover);
+  --color-coral-100: var(--raw-warning-tint);
+  --color-coral-50: var(--raw-warning-soft-tint);
+  --color-coral-400: var(--raw-warning-text);
+  --color-coral-700: var(--raw-warning-strong);
 
-  --color-emerald-600: #0e9f6e;
-  --color-emerald-500: #16b981;
-  --color-emerald-100: #d9f7ec;
+  --color-emerald-600: var(--raw-success);
+  --color-emerald-500: var(--raw-success-hover);
+  --color-emerald-100: var(--raw-success-tint);
+
+  --color-ink: var(--raw-ink);
+  --color-ink-hover: var(--raw-ink-hover);
+  --color-on-ink: var(--raw-on-ink);
+
+  --color-overlay: var(--raw-overlay);
 
   --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
 
-  --shadow-card: 0 1px 2px rgba(14, 42, 68, 0.04), 0 8px 24px rgba(14, 42, 68, 0.08);
-  --shadow-float: 0 12px 32px rgba(14, 42, 68, 0.18);
+  --shadow-card: 0 1px 2px rgba(var(--raw-shadow-rgb), 0.04), 0 8px 24px rgba(var(--raw-shadow-rgb), 0.08);
+  --shadow-float: 0 12px 32px rgba(var(--raw-shadow-rgb), 0.18);
 }
 
 @layer base {
-  :root {
-    color-scheme: light;
-  }
-
   body {
     margin: 0;
     background: var(--color-sky-50);
@@ -41,6 +159,21 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Restrained color-only transition for theme switching (150-250ms per
+     spec); reduced-motion below zeroes this out along with every other
+     transition/animation in the app. */
+  *,
+  *::before,
+  *::after {
+    transition:
+      background-color 200ms ease,
+      border-color 200ms ease,
+      color 200ms ease,
+      fill 200ms ease,
+      stroke 200ms ease,
+      outline-color 200ms ease;
   }
 
   @media (prefers-reduced-motion: reduce) {

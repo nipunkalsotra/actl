@@ -43,7 +43,7 @@ export function StickyTripBar() {
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 80, opacity: 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-sky-100 bg-white/95 backdrop-blur"
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-sky-100 bg-card/95 backdrop-blur"
       >
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
           <div className="min-w-0 flex-1">

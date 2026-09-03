@@ -55,7 +55,7 @@ function verifyChainEvidence(result: DemoVerifyChainResponse) {
     <dl className="mt-3 space-y-1 text-xs text-navy-700">
       <div className="flex justify-between">
         <dt className="text-navy-500">Result</dt>
-        <dd className={`font-medium ${result.ok ? "text-emerald-600" : "text-coral-600"}`}>
+        <dd className={`font-medium ${result.ok ? "text-emerald-600" : "text-coral-400"}`}>
           {result.ok ? "VALID" : "BROKEN"}
         </dd>
       </div>
@@ -85,7 +85,7 @@ function DemoCardShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-card">
+    <div className="rounded-2xl border border-sky-100 bg-card p-5 shadow-card">
       <div className="flex items-center gap-2">
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-navy-700">
           <Icon size={16} />
@@ -103,7 +103,7 @@ function DemoCardShell({
 
 function DemoRunError({ error }: { error: unknown }) {
   return (
-    <p className="mt-2 flex items-center gap-1.5 text-xs text-coral-600">
+    <p className="mt-2 flex items-center gap-1.5 text-xs text-coral-400">
       <TriangleAlert size={13} />
       {error instanceof ApiError && typeof error.detail === "string"
         ? error.detail
@@ -129,12 +129,12 @@ function ScenarioCard({ title, description, icon, endpoint, disabledReason }: Sc
         type="button"
         disabled={disabledReason !== null || mutation.isPending}
         onClick={() => mutation.mutate(endpoint)}
-        className="mt-4 w-full rounded-xl bg-navy-900 px-3 py-2 text-sm font-semibold text-white hover:bg-navy-700 disabled:cursor-not-allowed disabled:bg-sky-100 disabled:text-navy-500"
+        className="mt-4 w-full rounded-xl bg-ink px-3 py-2 text-sm font-semibold text-on-ink hover:bg-ink-hover disabled:cursor-not-allowed disabled:bg-sky-100 disabled:text-navy-500"
       >
         {mutation.isPending ? "Running…" : "Run demo"}
       </button>
 
-      {disabledReason && <p className="mt-2 text-xs text-coral-600">{disabledReason}</p>}
+      {disabledReason && <p className="mt-2 text-xs text-coral-400">{disabledReason}</p>}
 
       {mutation.isSuccess && (
         <div className="mt-2 rounded-xl bg-emerald-100/60 p-3">
@@ -163,12 +163,12 @@ function VerifyChainCard({ disabledReason }: { disabledReason: string | null }) 
         type="button"
         disabled={disabledReason !== null || mutation.isPending}
         onClick={() => mutation.mutate()}
-        className="mt-4 w-full rounded-xl bg-navy-900 px-3 py-2 text-sm font-semibold text-white hover:bg-navy-700 disabled:cursor-not-allowed disabled:bg-sky-100 disabled:text-navy-500"
+        className="mt-4 w-full rounded-xl bg-ink px-3 py-2 text-sm font-semibold text-on-ink hover:bg-ink-hover disabled:cursor-not-allowed disabled:bg-sky-100 disabled:text-navy-500"
       >
         {mutation.isPending ? "Verifying…" : "Run demo"}
       </button>
 
-      {disabledReason && <p className="mt-2 text-xs text-coral-600">{disabledReason}</p>}
+      {disabledReason && <p className="mt-2 text-xs text-coral-400">{disabledReason}</p>}
 
       {mutation.isSuccess && (
         <div
@@ -176,7 +176,7 @@ function VerifyChainCard({ disabledReason }: { disabledReason: string | null }) 
         >
           <p
             className={`flex items-center gap-1.5 text-xs font-semibold ${
-              mutation.data.ok ? "text-emerald-600" : "text-coral-600"
+              mutation.data.ok ? "text-emerald-600" : "text-coral-400"
             }`}
           >
             {mutation.data.ok ? <CheckCircle2 size={13} /> : <TriangleAlert size={13} />}
@@ -204,7 +204,7 @@ export function DemoLabSection() {
     <div className="space-y-4">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold text-navy-900">
-          <FlaskConical className="text-coral-600" size={22} />
+          <FlaskConical className="text-coral-400" size={22} />
           Demo Lab
         </h1>
         <p className="mt-1 text-sm text-navy-500">

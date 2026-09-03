@@ -11,7 +11,7 @@ interface KpiCardProps {
 
 export function KpiCard({ label, value, context, isLoading, isError, emptyHint }: KpiCardProps) {
   return (
-    <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-card">
+    <div className="rounded-2xl border border-sky-100 bg-card p-5 shadow-card">
       <p className="text-sm font-medium text-navy-500">{label}</p>
 
       {isLoading && (
@@ -22,7 +22,7 @@ export function KpiCard({ label, value, context, isLoading, isError, emptyHint }
       )}
 
       {!isLoading && isError && (
-        <p className="mt-3 flex items-center gap-1.5 text-sm text-coral-600">
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-coral-400">
           <CircleAlert size={14} /> Couldn't load
         </p>
       )}

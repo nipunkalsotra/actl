@@ -23,7 +23,7 @@ export function GrowthSection() {
         <p className="mt-1 text-sm text-navy-500">Baseline vs. ACTL Upsell, arm by arm.</p>
       </div>
 
-      {kpis.isLoading && <div className="h-64 animate-pulse rounded-2xl bg-white shadow-card" />}
+      {kpis.isLoading && <div className="h-64 animate-pulse rounded-2xl bg-card shadow-card" />}
       {kpis.isError && (
         <div className="rounded-2xl border border-coral-100 bg-coral-100/40 p-6 text-center text-sm text-navy-700">
           Couldn't load growth data.
@@ -35,7 +35,7 @@ export function GrowthSection() {
 
           {kpis.data.baseline.sessions >= MIN_SESSIONS_PER_ARM &&
             kpis.data.upsell.sessions >= MIN_SESSIONS_PER_ARM && (
-              <div className="overflow-x-auto rounded-2xl border border-sky-100 bg-white shadow-card">
+              <div className="overflow-x-auto rounded-2xl border border-sky-100 bg-card shadow-card">
                 <table className="w-full min-w-[420px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-sky-100 text-xs font-semibold uppercase tracking-wide text-navy-500">
@@ -57,7 +57,7 @@ export function GrowthSection() {
                           {row.label}
                         </th>
                         <td className="px-4 py-3 text-navy-900">{row.format(kpis.data.baseline)}</td>
-                        <td className="px-4 py-3 font-medium text-ocean-600">
+                        <td className="px-4 py-3 font-medium text-ocean-400">
                           {row.format(kpis.data.upsell)}
                         </td>
                       </tr>

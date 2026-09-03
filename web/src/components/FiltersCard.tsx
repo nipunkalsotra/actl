@@ -26,7 +26,7 @@ function Stepper({
           aria-label={`Decrease ${label.toLowerCase()}`}
           disabled={value <= min}
           onClick={() => onChange(Math.max(min, value - 1))}
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-navy-700 shadow-sm disabled:opacity-40"
+          className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-navy-700 shadow-sm disabled:opacity-40"
         >
           <Minus size={14} />
         </button>
@@ -38,7 +38,7 @@ function Stepper({
           aria-label={`Increase ${label.toLowerCase()}`}
           disabled={value >= max}
           onClick={() => onChange(Math.min(max, value + 1))}
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-navy-700 shadow-sm disabled:opacity-40"
+          className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-navy-700 shadow-sm disabled:opacity-40"
         >
           <Plus size={14} />
         </button>
@@ -52,7 +52,7 @@ export function FiltersCard() {
   const locked = mandate !== null;
 
   return (
-    <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-card">
+    <div className="rounded-2xl border border-sky-100 bg-card p-5 shadow-card">
       <h2 className="mb-4 text-base font-semibold text-navy-900">Your Goa trip</h2>
 
       <div className="space-y-4">

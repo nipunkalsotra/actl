@@ -20,12 +20,12 @@ export function AssistantLauncher() {
         setChatOpen(true);
         setChatMinimized(false);
       }}
-      className={`fixed right-5 z-30 flex items-center gap-3 rounded-full bg-white py-2 pl-2 pr-4 shadow-float hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ocean-500 sm:right-6 ${bottomClass}`}
+      className={`fixed right-5 z-30 flex items-center gap-3 rounded-full bg-card py-2 pl-2 pr-4 shadow-float hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ocean-500 sm:right-6 ${bottomClass}`}
       aria-label="Open ACTL travel assistant"
     >
       <span className="relative shrink-0">
         <TrustCompassMark size={44} />
-        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
+        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card bg-emerald-500" />
       </span>
       <span className="text-left leading-tight">
         <span className="block text-sm font-semibold text-navy-900">Planning a Goa escape?</span>

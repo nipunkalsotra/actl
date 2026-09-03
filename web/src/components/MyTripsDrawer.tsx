@@ -24,7 +24,7 @@ export function MyTripsDrawer({ open, onClose }: MyTripsDrawerProps) {
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
         transition={{ type: "spring", stiffness: 320, damping: 32 }}
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-hidden bg-white shadow-float sm:rounded-l-3xl"
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-hidden bg-card shadow-float sm:rounded-l-3xl"
       >
         <div className="flex items-center justify-between border-b border-sky-100 px-5 py-4">
           <h2 className="flex items-center gap-2 text-base font-semibold text-navy-900">

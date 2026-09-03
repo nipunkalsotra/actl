@@ -32,18 +32,22 @@ export function HotelCard({
   return (
     <div
       data-testid={`hotel-card-${item.sku}`}
-      className={`overflow-hidden rounded-2xl border bg-white shadow-card transition-shadow ${
+      className={`overflow-hidden rounded-2xl border shadow-card transition-shadow ${
         selected ? "border-ocean-500 ring-2 ring-ocean-500/30" : "border-sky-100"
-      } ${blocked ? "opacity-70" : ""}`}
+      } ${blocked ? "bg-sky-50" : "bg-card"}`}
     >
       <div className={`relative h-32 bg-gradient-to-br ${hotelGradient(item.sku)} sm:h-36`}>
+        {/* Muted image scrim, not a whole-card opacity fade -- the text
+            panel below stays at full, independently-verified contrast;
+            only the photo signals "unavailable" here. */}
+        {blocked && <div className="absolute inset-0 bg-overlay/50" />}
         {badge && (
           <span className="absolute left-3 top-3 rounded-full bg-ocean-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
             {badge}
           </span>
         )}
         {soldOut ? (
-          <span className="absolute right-3 top-3 rounded-full bg-navy-900/80 px-2.5 py-1 text-xs font-semibold text-white">
+          <span className="absolute right-3 top-3 rounded-full bg-overlay/80 px-2.5 py-1 text-xs font-semibold text-white">
             Sold out
           </span>
         ) : (

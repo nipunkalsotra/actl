@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useJourney } from "../state/journeyContext";
 import { ProfileMenu } from "./ProfileMenu";
+import { ThemeToggle } from "./ThemeToggle";
 import { TrustCompassMark } from "./TrustCompassMark";
 
 interface HeaderProps {
@@ -27,7 +28,7 @@ export function Header({ onOpenTrips, onOpenHelp }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-sky-100 bg-white">
+    <header className="sticky top-0 z-30 border-b border-sky-100 bg-card">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
         <button
           type="button"
@@ -84,6 +85,7 @@ export function Header({ onOpenTrips, onOpenHelp }: HeaderProps) {
             <LayoutDashboard size={16} />
             Merchant view
           </Link>
+          <ThemeToggle />
           <ProfileMenu onOpenTrips={onOpenTrips} onOpenHelp={onOpenHelp} />
         </div>
       </div>

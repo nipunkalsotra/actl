@@ -404,7 +404,7 @@ export function ChatPanel() {
         animate={{ opacity: 1, x: 0, scale: 1 }}
         exit={{ opacity: 0, x: 40, scale: 0.98 }}
         transition={{ type: "spring", stiffness: 320, damping: 30 }}
-        className={`fixed z-40 flex flex-col overflow-hidden rounded-3xl border border-sky-100 bg-white shadow-float transition-[height] ${
+        className={`fixed z-40 flex flex-col overflow-hidden rounded-3xl border border-sky-100 bg-card shadow-float transition-[height] ${
           chatMinimized
             ? `bottom-5 right-5 h-16 w-72 ${tripBarClear ? "sm:bottom-24" : "sm:bottom-6"} sm:right-6`
             : `inset-x-4 bottom-4 top-20 sm:inset-auto sm:right-6 sm:top-auto sm:h-[600px] sm:w-[380px] ${tripBarClear ? "sm:bottom-24" : "sm:bottom-6"}`
@@ -474,7 +474,7 @@ export function ChatPanel() {
                   <button
                     type="button"
                     onClick={() => void handleRetry()}
-                    className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-coral-600 shadow-sm hover:bg-coral-50"
+                    className="flex items-center gap-1 rounded-full bg-card px-2.5 py-1 text-xs font-semibold text-coral-400 shadow-sm hover:bg-coral-50"
                   >
                     <RotateCcw size={12} /> Retry
                   </button>
@@ -483,7 +483,7 @@ export function ChatPanel() {
 
               {!mandate &&
                 TRIP_DETAIL_LABELS.some(({ key }) => knownSlots[key] !== null) && (
-                  <div className="rounded-2xl border border-sky-100 bg-white/70 p-3">
+                  <div className="rounded-2xl border border-sky-100 bg-card/70 p-3">
                     <p className="mb-1.5 text-xs font-medium text-navy-500">Trip details so far</p>
                     <div className="flex flex-wrap gap-1.5">
                       {TRIP_DETAIL_LABELS.filter(({ key }) => knownSlots[key] !== null).map(
@@ -501,7 +501,7 @@ export function ChatPanel() {
                 )}
 
               {clarification && !pending && (
-                <div className="rounded-2xl border border-sky-100 bg-white p-3 shadow-card">
+                <div className="rounded-2xl border border-sky-100 bg-card p-3 shadow-card">
                   <p className="mb-2 text-xs font-medium text-navy-500">
                     Or fill in the details directly:
                   </p>
@@ -563,7 +563,7 @@ export function ChatPanel() {
               )}
 
               {pending && !mandate && (
-                <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-card">
+                <div className="rounded-2xl border border-sky-100 bg-card p-4 shadow-card">
                   <p className="mb-3 text-sm font-semibold text-navy-900">Mandate review</p>
                   <dl className="space-y-1.5 text-sm">
                     <div className="flex items-center justify-between">
@@ -644,7 +644,7 @@ export function ChatPanel() {
                       onClick={() =>
                         navigate(`/merchant?order_id=${orderStatus.data.order_id}&panel=proof`)
                       }
-                      className="rounded-full border border-sky-100 bg-white px-3 py-1.5 text-xs font-medium text-navy-700 hover:bg-sky-50"
+                      className="rounded-full border border-sky-100 bg-card px-3 py-1.5 text-xs font-medium text-navy-700 hover:bg-sky-50"
                     >
                       View proof
                     </button>
@@ -657,7 +657,7 @@ export function ChatPanel() {
                 !upsellDismissed &&
                 upsellStage === "idle" &&
                 (upsellOffers.data?.offers.length ?? 0) > 0 && (
-                  <div className="rounded-2xl border border-coral-100 bg-white p-4 shadow-card">
+                  <div className="rounded-2xl border border-coral-100 bg-card p-4 shadow-card">
                     <p className="text-sm font-semibold text-navy-900">
                       Your Goa stay is confirmed. Want to see optional extras for this trip?
                     </p>
@@ -684,7 +684,7 @@ export function ChatPanel() {
                 )}
 
               {upsellStage === "options" && (
-                <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-card">
+                <div className="rounded-2xl border border-sky-100 bg-card p-4 shadow-card">
                   <p className="mb-3 text-sm font-semibold text-navy-900">Optional extras for this trip</p>
                   {upsellOffers.data && upsellOffers.data.offers.length > 0 ? (
                     <div className="space-y-2">
@@ -724,7 +724,7 @@ export function ChatPanel() {
               )}
 
               {upsellStage === "review" && selectedOffer && (
-                <div className="rounded-2xl border border-coral-100 bg-white p-4 shadow-card">
+                <div className="rounded-2xl border border-coral-100 bg-card p-4 shadow-card">
                   <p className="text-sm font-semibold text-navy-900">Review: {selectedOffer.title}</p>
                   <p className="mt-1 text-xs text-navy-500">
                     This is separate from your original booking -- approving it authorizes one new,
@@ -779,7 +779,7 @@ export function ChatPanel() {
                           onClick={() =>
                             navigate(`/merchant?order_id=${upsellResult.addonOrderId}&panel=proof`)
                           }
-                          className="rounded-full border border-sky-100 bg-white px-3 py-1.5 text-xs font-medium text-navy-700 hover:bg-sky-50"
+                          className="rounded-full border border-sky-100 bg-card px-3 py-1.5 text-xs font-medium text-navy-700 hover:bg-sky-50"
                         >
                           View proof
                         </button>
@@ -787,7 +787,7 @@ export function ChatPanel() {
                           <button
                             type="button"
                             onClick={handleUpsellSeeOtherOptions}
-                            className="rounded-full border border-sky-100 bg-white px-3 py-1.5 text-xs font-medium text-navy-700 hover:bg-sky-50"
+                            className="rounded-full border border-sky-100 bg-card px-3 py-1.5 text-xs font-medium text-navy-700 hover:bg-sky-50"
                           >
                             See other extras
                           </button>
