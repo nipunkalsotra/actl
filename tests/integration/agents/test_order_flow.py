@@ -245,3 +245,34 @@ def test_all_seven_message_types_end_to_end(agent_client: AgentTestClient) -> No
     assert seen_types == _SEVEN_MESSAGE_TYPES
     assert len(seen_types) == 7
     assert receipt_envelope["body"]["payment_id"] is not None
+
+
+def test_catalog_query_rejects_out_of_range_max_unit_minor_never_500(
+    agent_client: AgentTestClient,
+) -> None:
+    """catalog.query's max_unit_minor shares GET /agent/v1/catalog's real
+    Postgres BigInteger (int64) storage bound -- one past it must be a
+    typed MALFORMED_REQUEST protocol rejection (a signed "error" response,
+    still HTTP 200 per this router's own business-outcome convention),
+    never an unhandled 500 from asyncpg's own BIGINT bind overflow."""
+    buyer = generate_test_identity("agt_buyer_catalog_bound")
+    agent_client.seed_identity(buyer)
+
+    too_big = agent_client.post_envelope(
+        build_signed_envelope(
+            buyer, to=_MERCHANT, type="catalog.query", body={"max_unit_minor": 9223372036854775808}
+        )
+    )
+    assert too_big.status_code == 200, too_big.text  # type: ignore[attr-defined]
+    rejected = too_big.json()  # type: ignore[attr-defined]
+    assert rejected["type"] == "error"
+    assert rejected["body"]["reason_code"] == "MALFORMED_REQUEST"
+
+    ok = agent_client.post_envelope(
+        build_signed_envelope(
+            buyer, to=_MERCHANT, type="catalog.query", body={"max_unit_minor": 500000}
+        )
+    )
+    assert ok.status_code == 200, ok.text  # type: ignore[attr-defined]
+    accepted = ok.json()  # type: ignore[attr-defined]
+    assert accepted["type"] == "catalog.query"

@@ -50,7 +50,13 @@ async def test_concurrent_overspend_denies_the_losers_with_budget_exceeded(
     clock = SystemClock()
     provider = SimulatorAdapter(clock=clock)
     breaker = CircuitBreaker(name="f9-chaos", clock=clock)
-    fixture = await seed_valid_gate_fixture(session_factory, clock)
+    # A generous decision TTL: 50 genuinely concurrent attempts can pile up
+    # deadlock retries (gate.execute_money_action retries G1-G5 up to 50x,
+    # up to 0.5s jitter each) under real contention -- the default 30s
+    # fixture TTL is tight enough that a straggler can legitimately go
+    # DECISION_STALE at G2 before ever reaching G4, which is correct,
+    # honest gate behavior but not what this test exists to prove.
+    fixture = await seed_valid_gate_fixture(session_factory, clock, decision_ttl_s=120)
 
     # tests/integration/audit's tamper-detection test deliberately corrupts
     # a row elsewhere in this same session-scoped chain (§28 P3) -- verify

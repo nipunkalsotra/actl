@@ -12,11 +12,13 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from actl.application.audit_service import verify_chain
 from actl.application.demo import DemoResult, UnknownScenario, run_scenario
+from actl.application.demo_runs import demo_run_json, get_run, start_demo_run
 from actl.application.explain_service import OrderNotFoundForExplain, explain_order
 from actl.application.growth.metrics import ArmMetrics, compute_growth_metrics
 from actl.config import settings
@@ -318,4 +320,41 @@ async def demo_verify_chain(uow: UnitOfWork = Depends(get_uow)) -> dict[str, Any
         "checkpoints_matched": result.checkpoints_matched,
         "head_entry_hash": result.head_entry_hash,
     }
+
+
+# ---------------------------------------------------------------------------
+# Trust Lab -- live, pollable demo runs. Same safety gate as the four
+# synchronous routes above (kept unchanged, still in service); this is an
+# additive, parallel surface the redesigned frontend uses instead, not a
+# replacement -- see application.demo_runs for why in-memory/background-task
+# rather than a new durable table.
+# ---------------------------------------------------------------------------
+
+
+class StartDemoRunRequest(BaseModel):
+    scenario: str
+
+
+@router.post("/merchant/v1/demo-runs")
+async def start_demo_run_route(
+    body: StartDemoRunRequest,
+    session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
+) -> dict[str, Any]:
+    _require_safe_demo_environment()
+    try:
+        run = await start_demo_run(body.scenario, session_factory)
+    except UnknownScenario as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return demo_run_json(run)
+
+
+@router.get("/merchant/v1/demo-runs/{run_id}")
+async def get_demo_run_route(run_id: str) -> dict[str, Any]:
+    _require_safe_demo_environment()
+    run = get_run(run_id)
+    if run is None:
+        raise HTTPException(
+            status_code=404, detail={"reason_code": "RUN_NOT_FOUND", "run_id": run_id}
+        )
+    return demo_run_json(run)
 

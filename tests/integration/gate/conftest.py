@@ -128,18 +128,31 @@ async def seed_valid_gate_fixture(
     unit_price_minor: int = 280000,
     nights: int = 3,
     mandate: Mandate | None = None,
+    decision_ttl_s: int = 30,
 ) -> GateFixture:
     """A fresh mandate + a fresh ALLOW decision bound to it + a fresh,
     unexpired quote at the *current* live catalog version -- every gate
     (G1-G7) passes on this fixture unmodified. Individual tests mutate
     one field of the returned pieces (or seed their own decision/quote
-    with a bad value) to exercise a specific deny path."""
+    with a bad value) to exercise a specific deny path.
+
+    `decision_ttl_s` defaults to `seed_decision`'s own 30s -- a heavy
+    concurrency test (tests/chaos/test_f9.py) passes a larger value so its
+    own deadlock-retry budget (gate.execute_money_action retries G1-G5 up
+    to 50x with up to 0.5s jitter each) can never legitimately push a
+    straggler attempt past G2 as DECISION_STALE instead of the G4
+    BUDGET_EXCEEDED it's specifically there to prove."""
     mandate = mandate or make_locked_mandate()
     await seed_mandate(session_factory, mandate)
 
     intent_hash = fake_hash(new_id("intent"))
     decision_id = await seed_decision(
-        session_factory, clock, mandate=mandate, intent_hash=intent_hash, verdict="ALLOW"
+        session_factory,
+        clock,
+        mandate=mandate,
+        intent_hash=intent_hash,
+        verdict="ALLOW",
+        ttl_s=decision_ttl_s,
     )
     quote_id = await seed_quote(session_factory, clock, mandate_id=mandate.mandate_id)
 

@@ -18,6 +18,13 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 CURRENCY: Literal["INR"] = "INR"
 
+# unit_price_minor (and any query bound on it, e.g. max_unit_minor) is
+# stored as a Postgres BigInteger (int64) column -- a value above this
+# overflows the DB bind deep in the repository (an unhandled asyncpg
+# DataError) instead of failing typed validation at the boundary, where
+# every interface that accepts this field must reject it instead.
+MAX_UNIT_PRICE_MINOR = 9223372036854775807
+
 
 class CatalogLocation(BaseModel):
     model_config = ConfigDict(frozen=True)
