@@ -25,6 +25,7 @@ from actl.application.catalog_service import (
     list_catalog,
 )
 from actl.domain.audit.canonical import jcs
+from actl.domain.catalog.models import MAX_UNIT_PRICE_MINOR
 from actl.infrastructure.db.uow import UnitOfWork
 from actl.interfaces.http.deps import get_clock, get_uow
 from actl.platform.clock import Clock
@@ -73,7 +74,7 @@ async def get_catalog(
     request: Request,
     category: Annotated[str | None, Query(pattern=_NO_NUL_BYTES)] = None,
     location: Annotated[str | None, Query(pattern=_NO_NUL_BYTES)] = None,
-    max_unit_minor: Annotated[int | None, Query(gt=0)] = None,
+    max_unit_minor: Annotated[int | None, Query(gt=0, le=MAX_UNIT_PRICE_MINOR)] = None,
     cursor: Annotated[str | None, Query(pattern=_NO_NUL_BYTES)] = None,
     limit: Annotated[int, Query(gt=0, le=100)] = 20,
     uow: UnitOfWork = Depends(get_uow),

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from actl.domain.catalog.models import MAX_UNIT_PRICE_MINOR
+
 # Postgres/asyncpg cannot represent a NUL byte in a text value at all
 # (`CharacterNotInRepertoireError`) -- any of these fields can reach a SQL
 # WHERE clause downstream, so reject one here rather than crash deep in a
@@ -23,7 +25,7 @@ class CapabilityDiscoverBody(BaseModel):
 class CatalogQueryBody(BaseModel):
     category: str | None = Field(default=None, pattern=_NO_NUL_BYTES)
     location: str | None = Field(default=None, pattern=_NO_NUL_BYTES)
-    max_unit_minor: int | None = Field(default=None, gt=0)
+    max_unit_minor: int | None = Field(default=None, gt=0, le=MAX_UNIT_PRICE_MINOR)
     cursor: str | None = Field(default=None, pattern=_NO_NUL_BYTES)
     limit: int = Field(default=20, gt=0, le=100)
 
