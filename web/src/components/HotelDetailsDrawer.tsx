@@ -23,14 +23,14 @@ export function HotelDetailsDrawer() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
-            className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl bg-white shadow-float"
+            className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl bg-card shadow-float"
           >
             <div className={`relative h-40 bg-gradient-to-br ${hotelGradient(item.sku)}`}>
               <button
                 type="button"
                 onClick={() => setDetailsSku(null)}
                 aria-label="Close details"
-                className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-navy-900 hover:bg-white"
+                className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-card/90 text-navy-900 hover:bg-card"
               >
                 <X size={16} />
               </button>

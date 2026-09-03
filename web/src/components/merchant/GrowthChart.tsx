@@ -49,7 +49,7 @@ function Bars({ metric }: { metric: Metric }) {
           />
         </div>
         <div className="flex h-full flex-col items-center justify-end gap-1">
-          <span className="text-xs font-semibold text-ocean-600">{metric.format(metric.upsell)}</span>
+          <span className="text-xs font-semibold text-ocean-400">{metric.format(metric.upsell)}</span>
           <div
             className="w-9 rounded-t-lg bg-ocean-600 sm:w-12"
             style={{ height: `${upsellHeight}%` }}
@@ -78,7 +78,7 @@ export function GrowthChart({ baseline, upsell }: GrowthChartProps) {
 
   if (!hasEnoughData) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-sky-100 bg-white text-center shadow-card">
+      <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-sky-100 bg-card text-center shadow-card">
         <p className="text-sm font-medium text-navy-700">Not enough completed sessions to compare yet</p>
         <p className="mt-1 max-w-xs text-xs text-navy-500">
           Needs at least {MIN_SESSIONS_PER_ARM} completed sessions in each arm (currently baseline:{" "}
@@ -90,7 +90,7 @@ export function GrowthChart({ baseline, upsell }: GrowthChartProps) {
   }
 
   return (
-    <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-card">
+    <div className="rounded-2xl border border-sky-100 bg-card p-5 shadow-card">
       <div className="mb-4 flex items-center gap-4 text-xs font-medium text-navy-500">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-sm bg-sky-100" /> Baseline

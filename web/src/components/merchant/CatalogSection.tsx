@@ -23,7 +23,7 @@ export function CatalogSection() {
         )}
       </div>
 
-      {catalog.isLoading && <div className="h-48 animate-pulse rounded-2xl bg-white shadow-card" />}
+      {catalog.isLoading && <div className="h-48 animate-pulse rounded-2xl bg-card shadow-card" />}
       {catalog.isError && (
         <div className="rounded-2xl border border-coral-100 bg-coral-100/40 p-6 text-center text-sm text-navy-700">
           Couldn't load the catalog.
@@ -31,7 +31,7 @@ export function CatalogSection() {
       )}
 
       {catalog.data && (
-        <div className="overflow-x-auto rounded-2xl border border-sky-100 bg-white shadow-card">
+        <div className="overflow-x-auto rounded-2xl border border-sky-100 bg-card shadow-card">
           <table className="w-full min-w-[560px] text-left text-sm">
             <thead>
               <tr className="border-b border-sky-100 text-xs font-semibold uppercase tracking-wide text-navy-500">

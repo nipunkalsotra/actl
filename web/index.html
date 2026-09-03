@@ -5,6 +5,23 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ACTL — Trusted stays in Goa</title>
+    <script>
+      // Applied before first paint to avoid a flash of the wrong theme --
+      // must stay in sync with state/theme.tsx's own resolution order
+      // (explicit localStorage choice, else system preference, else light).
+      (function () {
+        try {
+          var stored = localStorage.getItem("actl-theme");
+          var theme =
+            stored === "light" || stored === "dark"
+              ? stored
+              : window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

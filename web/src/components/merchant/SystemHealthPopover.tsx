@@ -61,13 +61,13 @@ export function SystemHealthPopover() {
         <div
           role="dialog"
           aria-label="System health"
-          className="absolute left-0 z-40 mt-2 w-72 rounded-2xl border border-sky-100 bg-white p-4 shadow-card sm:left-auto sm:right-0"
+          className="absolute left-0 z-40 mt-2 w-72 rounded-2xl border border-sky-100 bg-card p-4 shadow-card sm:left-auto sm:right-0"
         >
           <p className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-navy-900">
             <Activity size={15} /> System health
           </p>
           {health.isLoading && <p className="text-sm text-navy-500">Loading…</p>}
-          {health.isError && <p className="text-sm text-coral-600">Couldn't load health status.</p>}
+          {health.isError && <p className="text-sm text-coral-400">Couldn't load health status.</p>}
           {health.data && (
             <dl className="space-y-2">
               {ROWS.map((row) => (
@@ -75,7 +75,7 @@ export function SystemHealthPopover() {
                   <dt className="text-navy-500">{row.label}</dt>
                   <dd
                     className={`flex items-center gap-1 font-medium ${
-                      health.data![row.key] === "ok" ? "text-emerald-600" : "text-coral-600"
+                      health.data![row.key] === "ok" ? "text-emerald-600" : "text-coral-400"
                     }`}
                   >
                     {health.data![row.key] === "ok" ? (

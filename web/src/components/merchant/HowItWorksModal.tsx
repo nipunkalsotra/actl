@@ -27,7 +27,7 @@ export function HowItWorksModal({ open, onClose }: HowItWorksModalProps) {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 12 }}
         transition={{ type: "spring", stiffness: 320, damping: 28 }}
-        className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl bg-white p-6 shadow-float"
+        className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl bg-card p-6 shadow-float"
       >
         <div className="flex items-start justify-between">
           <h2 className="text-lg font-semibold text-navy-900">How consented upsells work</h2>

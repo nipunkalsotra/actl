@@ -13,7 +13,7 @@ const SORT_OPTIONS: { mode: SortMode; label: string }[] = [
 
 function CardSkeleton() {
   return (
-    <div className="animate-pulse overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-card">
+    <div className="animate-pulse overflow-hidden rounded-2xl border border-sky-100 bg-card shadow-card">
       <div className="h-32 bg-sky-100 sm:h-36" />
       <div className="space-y-2 p-4">
         <div className="h-4 w-2/3 rounded bg-sky-100" />
@@ -83,7 +83,7 @@ export function CatalogGrid() {
                 className={`rounded-full px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ocean-500 ${
                   sortMode === opt.mode
                     ? "bg-ocean-600 text-white"
-                    : "bg-white text-navy-700 shadow-card hover:bg-sky-50"
+                    : "bg-card text-navy-700 shadow-card hover:bg-sky-50"
                 } disabled:cursor-not-allowed disabled:opacity-40`}
               >
                 {opt.label}
@@ -122,7 +122,7 @@ export function CatalogGrid() {
       )}
 
       {!catalog.isLoading && !catalog.isError && sorted.length === 0 && (
-        <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center text-sm text-navy-500 shadow-card">
+        <div className="rounded-2xl border border-sky-100 bg-card p-8 text-center text-sm text-navy-500 shadow-card">
           No stays match your current filters. Try raising your budget or clearing the rating filter.
         </div>
       )}

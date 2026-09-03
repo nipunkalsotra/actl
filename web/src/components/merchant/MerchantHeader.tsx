@@ -1,5 +1,6 @@
 import { ExternalLink, Menu, User } from "lucide-react";
 import { Link } from "react-router-dom";
+import { ThemeToggle } from "../ThemeToggle";
 import { TrustCompassMark } from "../TrustCompassMark";
 import { SystemHealthPopover } from "./SystemHealthPopover";
 
@@ -15,7 +16,7 @@ interface MerchantHeaderProps {
 
 export function MerchantHeader({ onOpenSidebar }: MerchantHeaderProps) {
   return (
-    <header className="sticky top-0 z-30 border-b border-sky-100 bg-white">
+    <header className="sticky top-0 z-30 border-b border-sky-100 bg-card">
       <div className="flex h-16 items-center gap-3 px-4 sm:gap-4 sm:px-6">
         <button
           type="button"
@@ -54,6 +55,7 @@ export function MerchantHeader({ onOpenSidebar }: MerchantHeaderProps) {
             Buyer experience
             <ExternalLink size={14} />
           </Link>
+          <ThemeToggle />
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-navy-700">
             <User size={18} />
           </span>

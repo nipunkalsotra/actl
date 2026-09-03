@@ -31,7 +31,7 @@ export function TrustAuditSection() {
         </p>
       </div>
 
-      {trust.isLoading && <div className="h-32 animate-pulse rounded-2xl bg-white shadow-card" />}
+      {trust.isLoading && <div className="h-32 animate-pulse rounded-2xl bg-card shadow-card" />}
       {trust.isError && (
         <div className="rounded-2xl border border-coral-100 bg-coral-100/40 p-6 text-center text-sm text-navy-700">
           Couldn't load trust status.
@@ -39,7 +39,7 @@ export function TrustAuditSection() {
       )}
 
       {trust.data && (
-        <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-card">
+        <div className="rounded-2xl border border-sky-100 bg-card p-5 shadow-card">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="flex items-center gap-2 text-sm font-semibold text-emerald-600">
               <ShieldCheck size={16} />
@@ -48,7 +48,7 @@ export function TrustAuditSection() {
             <button
               type="button"
               onClick={() => setShowRaw((v) => !v)}
-              className="text-xs font-medium text-ocean-600 hover:underline"
+              className="text-xs font-medium text-ocean-400 hover:underline"
             >
               {showRaw ? "Hide" : "Show"} sequence & hash details
             </button>
@@ -122,7 +122,7 @@ export function TrustAuditSection() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {GUARANTEES.map((g) => (
-          <div key={g.title} className="rounded-2xl border border-sky-100 bg-white p-5 shadow-card">
+          <div key={g.title} className="rounded-2xl border border-sky-100 bg-card p-5 shadow-card">
             <p className="flex items-center gap-2 text-sm font-semibold text-navy-900">
               <ShieldCheck size={15} className="text-emerald-600" />
               {g.title}

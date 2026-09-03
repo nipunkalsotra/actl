@@ -54,13 +54,13 @@ function NavList({
           aria-current={active === "demo" ? "page" : undefined}
           onClick={() => onSelect("demo")}
           className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-ocean-500 ${
-            active === "demo" ? "bg-coral-500 text-white" : "text-coral-600 hover:bg-coral-100"
+            active === "demo" ? "bg-coral-500 text-white" : "text-coral-700 hover:bg-coral-100"
           }`}
         >
           <FlaskConical size={16} />
           Demo Lab
         </button>
-        <p className="mt-1 px-2 text-xs text-coral-600/80">Safe local simulator</p>
+        <p className="mt-1 px-2 text-xs text-coral-700/90">Safe local simulator</p>
       </div>
     </nav>
   );
@@ -76,7 +76,7 @@ interface MerchantSidebarProps {
 export function MerchantSidebar({ active, onSelect, mobileOpen, onCloseMobile }: MerchantSidebarProps) {
   return (
     <>
-      <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-60 shrink-0 flex-col border-r border-sky-100 bg-white lg:flex">
+      <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-60 shrink-0 flex-col border-r border-sky-100 bg-card lg:flex">
         <NavList active={active} onSelect={onSelect} />
       </aside>
 
@@ -89,7 +89,7 @@ export function MerchantSidebar({ active, onSelect, mobileOpen, onCloseMobile }:
           animate={{ x: 0 }}
           exit={{ x: "-100%" }}
           transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-white shadow-float"
+          className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-card shadow-float"
         >
           <div className="flex items-center justify-between border-b border-sky-100 px-4 py-3">
             <span className="text-sm font-semibold text-navy-900">Navigation</span>

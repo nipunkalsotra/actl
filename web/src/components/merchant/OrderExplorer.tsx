@@ -112,7 +112,7 @@ export function OrderExplorer({ orderId, onClose, showBackToBuyer = false }: Ord
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
         transition={{ type: "spring", stiffness: 320, damping: 32 }}
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col overflow-hidden bg-white shadow-float sm:rounded-l-3xl"
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col overflow-hidden bg-card shadow-float sm:rounded-l-3xl"
       >
         <div className="flex items-start justify-between border-b border-sky-100 px-5 py-4">
           <div className="min-w-0">
@@ -120,7 +120,7 @@ export function OrderExplorer({ orderId, onClose, showBackToBuyer = false }: Ord
               <button
                 type="button"
                 onClick={() => navigate("/")}
-                className="mb-1 flex items-center gap-1 text-xs font-medium text-ocean-600 hover:underline"
+                className="mb-1 flex items-center gap-1 text-xs font-medium text-ocean-400 hover:underline"
               >
                 <ArrowLeft size={12} /> Back to buyer
               </button>
@@ -161,7 +161,7 @@ export function OrderExplorer({ orderId, onClose, showBackToBuyer = false }: Ord
         <div className="flex-1 overflow-y-auto p-5">
           {(status.isLoading || audit.isLoading) && <p className="text-sm text-navy-500">Loading…</p>}
           {(status.isError || audit.isError) && (
-            <p className="text-sm text-coral-600">Couldn't load this order's evidence.</p>
+            <p className="text-sm text-coral-400">Couldn't load this order's evidence.</p>
           )}
 
           {audit.data && (
@@ -194,7 +194,7 @@ export function OrderExplorer({ orderId, onClose, showBackToBuyer = false }: Ord
               <button
                 type="button"
                 onClick={() => setShowRawEvidence((v) => !v)}
-                className="mt-4 text-xs font-medium text-ocean-600 hover:underline"
+                className="mt-4 text-xs font-medium text-ocean-400 hover:underline"
               >
                 {showRawEvidence ? "Hide" : "Show"} detailed evidence
               </button>

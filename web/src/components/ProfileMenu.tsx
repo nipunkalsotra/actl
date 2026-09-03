@@ -45,7 +45,7 @@ export function ProfileMenu({ onOpenTrips, onOpenHelp }: ProfileMenuProps) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-40 mt-2 w-64 rounded-2xl border border-sky-100 bg-white p-2 shadow-card"
+          className="absolute right-0 z-40 mt-2 w-64 rounded-2xl border border-sky-100 bg-card p-2 shadow-card"
         >
           <div className="px-3 py-2">
             <p className="text-sm font-semibold text-navy-900">Demo buyer</p>
