@@ -68,6 +68,70 @@ export interface DemoVerifyChainResponse {
   head_entry_hash?: string | null;
 }
 
+// Trust Lab -- live, pollable demo runs. Every field here is either a
+// direct real value (audit_seq, reason_code, amounts) or a real,
+// already-persisted computed result; never a frontend-fabricated one.
+export type DemoRunScenario = "stale_price" | "declined" | "llm_down" | "verify_chain";
+export type DemoRunStatus = "queued" | "running" | "passed" | "failed";
+export type DemoEventStatus =
+  | "pending"
+  | "running"
+  | "passed"
+  | "blocked"
+  | "failed"
+  | "compensated";
+
+export interface DemoEventEvidence {
+  order_id?: string;
+  quote_id?: string;
+  catalog_version?: number;
+  gate?: string;
+  reason_code?: string;
+  payment_state?: string;
+  reserved_balance_minor?: number;
+  released_balance_minor?: number;
+  audit_seq?: number;
+  entry_hash_prefix?: string;
+  checkpoint_status?: string;
+}
+
+export interface DemoEvent {
+  seq: number;
+  ts: string;
+  phase: string;
+  kind: string;
+  title: string;
+  detail: string;
+  status: DemoEventStatus;
+  evidence: DemoEventEvidence;
+}
+
+export interface DemoRunResult {
+  scenario: string;
+  detected_fault: string | null;
+  terminal_outcome: string;
+  recovery_action: string;
+  reserved_balance_minor: number;
+  mandate_id: string | null;
+  trace_id: string | null;
+  order_id: string | null;
+  seq_range: [number, number] | null;
+  chain_verified: boolean | null;
+  entries_verified: number | null;
+}
+
+export interface DemoRun {
+  run_id: string;
+  scenario: string;
+  status: DemoRunStatus;
+  started_at: string;
+  completed_at: string | null;
+  events: DemoEvent[];
+  result: DemoRunResult | null;
+  order_id: string | null;
+  error: string | null;
+}
+
 export interface GrowthArmMetrics {
   arm: string;
   sessions: number;

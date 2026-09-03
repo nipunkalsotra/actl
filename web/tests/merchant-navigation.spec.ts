@@ -34,7 +34,7 @@ test.describe("buyer <-> merchant navigation", () => {
     await page.getByRole("button", { name: "Trust & audit", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Trust & audit", exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "Demo Lab", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Demo Lab", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Trust Lab", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "ACTL Trust Lab", exact: true })).toBeVisible();
   });
 });

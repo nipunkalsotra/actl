@@ -37,10 +37,16 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from actl.application.agents.merchant import handle_order_propose
-from actl.application.audit_service import ChainVerificationResult, verify_chain
+from actl.application.audit_service import ChainVerificationResult, append_entry, verify_chain
 from actl.application.catalog_service import create_quote
 from actl.application.conversation.extraction import extract_mandate_draft
 from actl.application.conversation.ranking import rank_candidates
+from actl.application.demo_events import (
+    NULL_RECORDER,
+    DemoEventStatus,
+    DemoEvidence,
+    DemoRunRecorder,
+)
 from actl.application.orchestrator import saga
 from actl.application.recovery import propose_with_one_requote_on_stale_price
 from actl.config import settings
@@ -50,6 +56,7 @@ from actl.domain.audit.chain import (
     parse_hex_prefixed,
     payload_hash,
 )
+from actl.domain.audit.events import AuditAction
 from actl.domain.catalog.models import (
     CatalogAttributes,
     CatalogItem,
@@ -73,6 +80,7 @@ from actl.domain.mandate.signing import sign_spec_hash
 from actl.domain.mandate.state_machine import MandateStatus
 from actl.domain.policy.reason_codes import ReasonCode
 from actl.domain.policy.rules import PurchaseIntent, compute_intent_hash
+from actl.infrastructure.db.repositories.audit_log import AuditLogRecord
 from actl.infrastructure.db.repositories.catalog import CatalogItemRecord
 from actl.infrastructure.db.uow import UnitOfWork
 from actl.infrastructure.llm.fallback import NullLLMClient
@@ -116,6 +124,7 @@ class DemoResult:
     trace_id: str
     seq_range: tuple[int, int] | None = None
     chain: ChainVerificationResult | None = None
+    order_id: str | None = None
 
 
 def _build_mandate(*, max_total_minor: int, max_unit_minor: int, nights: int = 3) -> Mandate:
@@ -208,6 +217,234 @@ async def _chain_status(
         return await verify_chain(uow, seq_range[0], seq_range[1])
 
 
+# Reason codes not named here fall back to "G3" (the policy engine's own
+# rule-catalogue verdict) -- see application/gate.py's G1-G7 execution
+# order for the source of this mapping.
+_GATE_BY_REASON_CODE: dict[str, str] = {
+    "MANDATE_INVALID": "G1",
+    "MANDATE_REVOKED": "G1",
+    "MANDATE_TAMPERED": "G1",
+    "MANDATE_UNSIGNED": "G1",
+    "MANDATE_EXPIRED": "G1",
+    "MANDATE_NOT_YET_VALID": "G1",
+    "INTENT_MISMATCH": "G2",
+    "DECISION_STALE": "G2",
+    "BUDGET_EXCEEDED": "G4",
+    "QUOTE_EXPIRED": "G5",
+    "STALE_PRICE": "G5",
+    "PROVIDER_TERMINAL": "G6/G7",
+    "PROVIDER_TRANSIENT": "G6/G7",
+    "INTERNAL_ERROR": "G6/G7",
+    "AUDIT_UNAVAILABLE": "G6/G7",
+}
+
+
+def _gate_for_reason(reason_code: str) -> str:
+    return _GATE_BY_REASON_CODE.get(reason_code, "G3")
+
+
+def _hash_prefix(entry_hash: str) -> str:
+    return entry_hash[:23]
+
+
+def _pstr(payload: dict[str, object], key: str) -> str | None:
+    value = payload.get(key)
+    return None if value is None else str(value)
+
+
+def _pint(payload: dict[str, object], key: str) -> int | None:
+    value = payload.get(key)
+    return None if value is None else int(value)  # type: ignore[call-overload]
+
+
+def _emit_events_for_entries(recorder: DemoRunRecorder, entries: list[AuditLogRecord]) -> None:
+    """One real `DemoEvent` per real audit entry, built only from that
+    entry's own already-persisted `payload`/`subject`/`seq`/`entry_hash` --
+    never a value this function invents. Actions this Trust Lab doesn't
+    narrate (`policy.decision` duplicates `order.proposed`'s own embedded
+    verdict; `mandate.locked` comes from the mandates table directly, not
+    the audit chain) are silently skipped, not stubbed."""
+    for e in entries:
+        payload = e.payload
+        subject = e.subject
+        seq = e.seq
+        prefix = _hash_prefix(e.entry_hash)
+        action = e.action
+
+        if action == AuditAction.QUOTE_ISSUED:
+            catalog_version = _pint(payload, "catalog_version")
+            price_minor = _pint(payload, "price_minor") or 0
+            recorder.emit(
+                phase="quote",
+                kind="quote.issued",
+                title="Quote issued",
+                detail=(
+                    f"Pinned at catalog version {catalog_version}, "
+                    f"₹{price_minor / 100:,.0f}/night."
+                ),
+                status=DemoEventStatus.PASSED,
+                evidence=DemoEvidence(
+                    quote_id=_pstr(subject, "quote_id"),
+                    catalog_version=catalog_version,
+                    audit_seq=seq,
+                    entry_hash_prefix=prefix,
+                ),
+            )
+        elif action == AuditAction.CATALOG_PRICE_MUTATED:
+            catalog_version = _pint(payload, "catalog_version")
+            new_price_minor = _pint(payload, "new_unit_price_minor") or 0
+            recorder.emit(
+                phase="fault_injection",
+                kind="catalog.price_mutated",
+                title="Out-of-band price change (fault injection)",
+                detail=(
+                    f"Catalog moved to version {catalog_version} at "
+                    f"₹{new_price_minor / 100:,.0f}/night."
+                ),
+                status=DemoEventStatus.RUNNING,
+                evidence=DemoEvidence(
+                    catalog_version=catalog_version,
+                    audit_seq=seq,
+                    entry_hash_prefix=prefix,
+                ),
+            )
+        elif action == AuditAction.ORDER_PROPOSED:
+            verdict = _pstr(payload, "verdict")
+            reason_codes_raw = payload.get("reason_codes")
+            reason = (
+                str(reason_codes_raw[0])
+                if isinstance(reason_codes_raw, list) and reason_codes_raw
+                else None
+            )
+            if verdict == "ALLOW":
+                recorder.emit(
+                    phase="gate",
+                    kind="order.proposed.allowed",
+                    title="Order proposed and allowed",
+                    detail="Mandate, decision binding, and freshness all checked -- order created.",
+                    status=DemoEventStatus.PASSED,
+                    evidence=DemoEvidence(
+                        quote_id=_pstr(payload, "quote_id"), reason_code=reason,
+                        audit_seq=seq, entry_hash_prefix=prefix,
+                    ),
+                )
+            else:
+                gate = _gate_for_reason(reason) if reason else None
+                recorder.emit(
+                    phase="gate",
+                    kind="order.proposed.denied",
+                    title=f"Gate {gate} blocked the purchase" if gate else "Purchase blocked",
+                    detail=f"Denied with reason {reason} -- blocked before payment/capture.",
+                    status=DemoEventStatus.BLOCKED,
+                    evidence=DemoEvidence(
+                        quote_id=_pstr(payload, "quote_id"), gate=gate, reason_code=reason,
+                        audit_seq=seq, entry_hash_prefix=prefix,
+                    ),
+                )
+        elif action == AuditAction.BUDGET_RESERVED:
+            amount_minor = _pint(payload, "amount_minor") or 0
+            recorder.emit(
+                phase="ledger",
+                kind="budget.reserved",
+                title="Budget reserved",
+                detail=f"₹{amount_minor / 100:,.0f} held against the mandate.",
+                status=DemoEventStatus.PASSED,
+                evidence=DemoEvidence(
+                    reserved_balance_minor=amount_minor,
+                    audit_seq=seq, entry_hash_prefix=prefix,
+                ),
+            )
+        elif action == AuditAction.PAYMENT_INTENT:
+            recorder.emit(
+                phase="payment",
+                kind="payment.intent",
+                title="Payment requested",
+                detail=f"Simulator payment intent created ({_pstr(payload, 'mode')} mode).",
+                status=DemoEventStatus.RUNNING,
+                evidence=DemoEvidence(
+                    order_id=_pstr(payload, "order_id"), payment_state="requested",
+                    audit_seq=seq, entry_hash_prefix=prefix,
+                ),
+            )
+        elif action == AuditAction.PAYMENT_RESULT:
+            status_str = _pstr(payload, "status") or "unknown"
+            passed = status_str == "captured"
+            recorder.emit(
+                phase="payment",
+                kind="payment.result",
+                title="Payment captured" if passed else "Payment declined",
+                detail=f"Simulator reported status={status_str}.",
+                status=DemoEventStatus.PASSED if passed else DemoEventStatus.BLOCKED,
+                evidence=DemoEvidence(
+                    payment_state=status_str, audit_seq=seq, entry_hash_prefix=prefix,
+                ),
+            )
+        elif action == AuditAction.SETTLEMENT_CLOSED:
+            amount_minor = _pint(payload, "amount_minor") or 0
+            recorder.emit(
+                phase="settlement",
+                kind="settlement.closed",
+                title="Order settled",
+                detail=f"₹{amount_minor / 100:,.0f} moved from reserved to settled.",
+                status=DemoEventStatus.PASSED,
+                evidence=DemoEvidence(
+                    order_id=_pstr(payload, "order_id"), reserved_balance_minor=0,
+                    audit_seq=seq, entry_hash_prefix=prefix,
+                ),
+            )
+        elif action == AuditAction.COMPENSATION_APPLIED:
+            reason = _pstr(payload, "reason")
+            recorder.emit(
+                phase="compensation",
+                kind="compensation.applied",
+                title="Compensation applied",
+                detail=f"Reservation released -- reason: {reason}.",
+                status=DemoEventStatus.COMPENSATED,
+                evidence=DemoEvidence(
+                    order_id=_pstr(payload, "order_id"),
+                    released_balance_minor=_pint(payload, "amount_minor"),
+                    reserved_balance_minor=0,
+                    reason_code="PROVIDER_DECLINED" if reason == "payment_declined" else None,
+                    audit_seq=seq, entry_hash_prefix=prefix,
+                ),
+            )
+        elif action == AuditAction.RESERVATION_RELEASED:
+            recorder.emit(
+                phase="compensation",
+                kind="reservation.released",
+                title="Reservation released",
+                detail="Held funds returned to the mandate's available balance.",
+                status=DemoEventStatus.COMPENSATED,
+                evidence=DemoEvidence(
+                    reserved_balance_minor=0, audit_seq=seq, entry_hash_prefix=prefix,
+                ),
+            )
+
+
+async def _sweep_new_audit_entries(
+    session_factory: async_sessionmaker[AsyncSession], recorder: DemoRunRecorder, after_seq: int
+) -> int:
+    """Reads every real audit entry committed since `after_seq` and emits
+    one real event per entry (`_emit_events_for_entries`); returns the new
+    high-water mark. Called at each natural break point between real,
+    separately-awaited operations in a scenario, so a live poller sees
+    events arrive in the same batches the real work actually committed in
+    -- never a fabricated per-event delay."""
+    async with UnitOfWork(session_factory) as uow:
+        tail = await uow.audit_log.get_tail()
+        if tail is None or tail[0] <= after_seq:
+            return after_seq
+        entries = await uow.audit_log.list_range(after_seq + 1, tail[0])
+    _emit_events_for_entries(recorder, entries)
+    return tail[0]
+
+
+async def _current_tail_seq(session_factory: async_sessionmaker[AsyncSession]) -> int:
+    async with UnitOfWork(session_factory) as uow:
+        tail = await uow.audit_log.get_tail()
+    return tail[0] if tail is not None else 0
+
+
 @dataclass(frozen=True)
 class _Purchase:
     order_id: str | None
@@ -228,9 +465,14 @@ async def _propose_and_settle(
     nights: int,
     actor_id: str,
     trace_id: str,
+    recorder: DemoRunRecorder = NULL_RECORDER,
+    cursor_seq: int = 0,
 ) -> _Purchase:
     """The real, deterministic P4-P7 transaction -- identical shape to
-    `application.growth.simulation._attempt_purchase`."""
+    `application.growth.simulation._attempt_purchase`. `cursor_seq` is the
+    audit-chain high-water mark the caller has already swept events up
+    through (0 for a fresh scenario); events for everything from there on
+    are emitted at each real, separately-awaited step below."""
     async with UnitOfWork(session_factory) as uow:
         quote = await create_quote(
             uow, clock, mandate_id=mandate.mandate_id, sku=sku, nights=nights, actor_id=actor_id
@@ -239,6 +481,7 @@ async def _propose_and_settle(
         item = await uow.catalog.get_item(sku)
     assert item is not None
     assert quote.quote_hash is not None
+    cursor_seq = await _sweep_new_audit_entries(session_factory, recorder, cursor_seq)
 
     intent_draft = PurchaseIntent(
         currency=mandate.bounds.currency,
@@ -265,6 +508,7 @@ async def _propose_and_settle(
     )
     if outcome.body.get("decision") != "accept":
         reason = ReasonCode(str(outcome.body["reason_code"]))
+        await _sweep_new_audit_entries(session_factory, recorder, cursor_seq)
         return _Purchase(None, None, quote.total_minor, False, reason)
 
     order_id = str(outcome.body["order_id"])
@@ -278,6 +522,7 @@ async def _propose_and_settle(
         await uow.orders.set_source(order_id, "demo_lab")
         await uow.commit()
     assert order is not None and order.provider_order_id is not None
+    cursor_seq = await _sweep_new_audit_entries(session_factory, recorder, cursor_seq)
     payments = await provider.fetch_payments(order.provider_order_id)
     payment = payments[0]
     signature = provider.build_checkout_payload(order.provider_order_id, payment.id)
@@ -286,10 +531,28 @@ async def _propose_and_settle(
         provider_order_id=order.provider_order_id, provider_payment_id=payment.id,
         provider_signature=signature, actor_id=actor_id,
     )
+    await _sweep_new_audit_entries(session_factory, recorder, cursor_seq)
     return _Purchase(order_id, saga_id, quote.total_minor, result.status == "COMPLETED", None)
 
 
-async def _happy_path(session_factory: async_sessionmaker[AsyncSession]) -> DemoResult:
+def _emit_mandate_locked(recorder: DemoRunRecorder, mandate: Mandate) -> None:
+    recorder.emit(
+        phase="setup",
+        kind="mandate.locked",
+        title="Mandate locked",
+        detail=(
+            f"Budget cap ₹{mandate.bounds.max_total_minor / 100:,.0f}, "
+            f"per-night cap ₹{mandate.bounds.max_unit_minor / 100:,.0f}."
+        ),
+        status=DemoEventStatus.PASSED,
+    )
+
+
+async def _happy_path(
+    session_factory: async_sessionmaker[AsyncSession],
+    recorder: DemoRunRecorder = NULL_RECORDER,
+    start_seq: int = 0,
+) -> DemoResult:
     clock = FrozenClock(at=_DEMO_NOW)
     provider = SimulatorAdapter(clock=clock)
     breaker = CircuitBreaker(name="demo-happy_path", clock=clock)
@@ -302,10 +565,12 @@ async def _happy_path(session_factory: async_sessionmaker[AsyncSession]) -> Demo
     async with UnitOfWork(session_factory) as uow:
         await uow.mandates.add(mandate, MandateStatus.LOCKED)
         await uow.commit()
+    _emit_mandate_locked(recorder, mandate)
 
     purchase = await _propose_and_settle(
         session_factory, provider, clock, breaker,
         mandate=mandate, sku=sku, nights=3, actor_id=actor_id, trace_id=trace_id,
+        recorder=recorder, cursor_seq=start_seq,
     )
     return DemoResult(
         scenario="happy_path",
@@ -315,10 +580,15 @@ async def _happy_path(session_factory: async_sessionmaker[AsyncSession]) -> Demo
         reserved_balance_minor=await _reserved_balance(session_factory, mandate.mandate_id),
         mandate_id=mandate.mandate_id,
         trace_id=trace_id,
+        order_id=purchase.order_id,
     )
 
 
-async def _over_cap(session_factory: async_sessionmaker[AsyncSession]) -> DemoResult:
+async def _over_cap(
+    session_factory: async_sessionmaker[AsyncSession],
+    recorder: DemoRunRecorder = NULL_RECORDER,
+    start_seq: int = 0,
+) -> DemoResult:
     clock = FrozenClock(at=_DEMO_NOW)
     provider = SimulatorAdapter(clock=clock)
     breaker = CircuitBreaker(name="demo-over_cap", clock=clock)
@@ -335,10 +605,12 @@ async def _over_cap(session_factory: async_sessionmaker[AsyncSession]) -> DemoRe
     async with UnitOfWork(session_factory) as uow:
         await uow.mandates.add(mandate, MandateStatus.LOCKED)
         await uow.commit()
+    _emit_mandate_locked(recorder, mandate)
 
     purchase = await _propose_and_settle(
         session_factory, provider, clock, breaker,
         mandate=mandate, sku=sku, nights=1, actor_id=actor_id, trace_id=trace_id,
+        recorder=recorder, cursor_seq=start_seq,
     )
     assert purchase.deny_reason == ReasonCode.UNIT_CAP_EXCEEDED, purchase
     return DemoResult(
@@ -352,7 +624,11 @@ async def _over_cap(session_factory: async_sessionmaker[AsyncSession]) -> DemoRe
     )
 
 
-async def _stale_price(session_factory: async_sessionmaker[AsyncSession]) -> DemoResult:
+async def _stale_price(
+    session_factory: async_sessionmaker[AsyncSession],
+    recorder: DemoRunRecorder = NULL_RECORDER,
+    start_seq: int = 0,
+) -> DemoResult:
     clock = FrozenClock(at=_DEMO_NOW)
     provider = SimulatorAdapter(clock=clock)
     breaker = CircuitBreaker(name="demo-stale_price", clock=clock)
@@ -368,28 +644,52 @@ async def _stale_price(session_factory: async_sessionmaker[AsyncSession]) -> Dem
             uow, clock, mandate_id=mandate.mandate_id, sku=sku, nights=3, actor_id=actor_id
         )
         await uow.commit()
+    _emit_mandate_locked(recorder, mandate)
+    cursor_seq = await _sweep_new_audit_entries(session_factory, recorder, start_seq)
 
     # --- FAULT INJECTION: the required out-of-band price mutation, never
-    # the normal catalog-admin endpoint (§28 P9 instruction 1). ---
+    # the normal catalog-admin endpoint (§28 P9 instruction 1). Audited
+    # directly here (not via catalog_service.mutate_price_demo_only, which
+    # is reserved for the admin router) so this real state change is a
+    # real CATALOG_PRICE_MUTATED chain entry, not a silent side effect. ---
+    new_price_minor = 292000
     async with UnitOfWork(session_factory) as uow:
-        await uow.catalog.mutate_price(sku, 292000)
+        updated = await uow.catalog.mutate_price(sku, new_price_minor)
+        await append_entry(
+            uow,
+            trace_id=trace_id,
+            actor_type="system",
+            actor_id=actor_id,
+            action=AuditAction.CATALOG_PRICE_MUTATED,
+            subject={"sku": sku},
+            payload={
+                "sku": sku,
+                "new_unit_price_minor": new_price_minor,
+                "catalog_version": updated.version,
+            },
+        )
         await uow.commit()
+    cursor_seq = await _sweep_new_audit_entries(session_factory, recorder, cursor_seq)
 
     outcome = await propose_with_one_requote_on_stale_price(
         session_factory, provider, clock, breaker,
         mandate=mandate, quote=pinned_quote, actor_id=actor_id, trace_id=trace_id,
     )
+    cursor_seq = await _sweep_new_audit_entries(session_factory, recorder, cursor_seq)
+
+    order_id: str | None = None
     if (
         outcome.result.verdict == "ALLOW"
         and outcome.saga_id is not None
         and outcome.result.order_id
     ):
+        order_id = outcome.result.order_id
         async with UnitOfWork(session_factory) as uow:
-            order = await uow.orders.get(outcome.result.order_id)
+            order = await uow.orders.get(order_id)
             # §28 P12: same tagging as _propose_and_settle -- this scenario's
             # own recovery/checkout path bypasses that helper, so it needs
             # its own tag rather than inheriting one.
-            await uow.orders.set_source(outcome.result.order_id, "demo_lab")
+            await uow.orders.set_source(order_id, "demo_lab")
             await uow.commit()
         assert order is not None and order.provider_order_id is not None
         payments = await provider.fetch_payments(order.provider_order_id)
@@ -400,6 +700,7 @@ async def _stale_price(session_factory: async_sessionmaker[AsyncSession]) -> Dem
             provider_order_id=order.provider_order_id, provider_payment_id=payment.id,
             provider_signature=signature, actor_id=actor_id,
         )
+        await _sweep_new_audit_entries(session_factory, recorder, cursor_seq)
 
     return DemoResult(
         scenario="stale_price",
@@ -414,10 +715,15 @@ async def _stale_price(session_factory: async_sessionmaker[AsyncSession]) -> Dem
         reserved_balance_minor=await _reserved_balance(session_factory, mandate.mandate_id),
         mandate_id=mandate.mandate_id,
         trace_id=trace_id,
+        order_id=order_id,
     )
 
 
-async def _declined(session_factory: async_sessionmaker[AsyncSession]) -> DemoResult:
+async def _declined(
+    session_factory: async_sessionmaker[AsyncSession],
+    recorder: DemoRunRecorder = NULL_RECORDER,
+    start_seq: int = 0,
+) -> DemoResult:
     clock = FrozenClock(at=_DEMO_NOW)
     provider = SimulatorAdapter(clock=clock, scenario=Scenario.DECLINE)
     breaker = CircuitBreaker(name="demo-declined", clock=clock)
@@ -430,10 +736,12 @@ async def _declined(session_factory: async_sessionmaker[AsyncSession]) -> DemoRe
     async with UnitOfWork(session_factory) as uow:
         await uow.mandates.add(mandate, MandateStatus.LOCKED)
         await uow.commit()
+    _emit_mandate_locked(recorder, mandate)
 
     purchase = await _propose_and_settle(
         session_factory, provider, clock, breaker,
         mandate=mandate, sku=sku, nights=3, actor_id=actor_id, trace_id=trace_id,
+        recorder=recorder, cursor_seq=start_seq,
     )
     assert not purchase.settled, "Scenario.DECLINE must never settle"
     async with UnitOfWork(session_factory) as uow:
@@ -447,10 +755,15 @@ async def _declined(session_factory: async_sessionmaker[AsyncSession]) -> DemoRe
         reserved_balance_minor=await _reserved_balance(session_factory, mandate.mandate_id),
         mandate_id=mandate.mandate_id,
         trace_id=trace_id,
+        order_id=purchase.order_id,
     )
 
 
-async def _llm_down(session_factory: async_sessionmaker[AsyncSession]) -> DemoResult:
+async def _llm_down(
+    session_factory: async_sessionmaker[AsyncSession],
+    recorder: DemoRunRecorder = NULL_RECORDER,
+    start_seq: int = 0,
+) -> DemoResult:
     """§17 Figure 17.1's HARD BOUNDARY: "If every LLM call failed, the
     transaction still completes correctly." `NullLLMClient` is real
     production infrastructure for `LLM_ENABLED=false`, not a test
@@ -466,6 +779,13 @@ async def _llm_down(session_factory: async_sessionmaker[AsyncSession]) -> DemoRe
 
     extraction_result = await extract_mandate_draft(llm, "book me something nice in Goa")
     assert isinstance(extraction_result, ClarificationNeeded)
+    recorder.emit(
+        phase="fallback",
+        kind="llm.extraction_fallback",
+        title="LLM unavailable -- deterministic extraction used",
+        detail="Every U1 call fails by design; the real, non-LLM fallback path answered instead.",
+        status=DemoEventStatus.PASSED,
+    )
 
     mandate = _build_mandate(max_total_minor=900000, max_unit_minor=300000)
     await _seed_item(session_factory, sku=sku, unit_price_minor=280000)
@@ -492,10 +812,19 @@ async def _llm_down(session_factory: async_sessionmaker[AsyncSession]) -> DemoRe
     ]
     ranking_result = await rank_candidates(llm, candidates, mandate)
     assert ranking_result.degraded is True
+    recorder.emit(
+        phase="fallback",
+        kind="llm.ranking_fallback",
+        title="Deterministic ranking used",
+        detail="Every U2 call fails by design; candidates ranked without the LLM (degraded=true).",
+        status=DemoEventStatus.PASSED,
+    )
+    _emit_mandate_locked(recorder, mandate)
 
     purchase = await _propose_and_settle(
         session_factory, provider, clock, breaker,
         mandate=mandate, sku=sku, nights=3, actor_id=actor_id, trace_id=trace_id,
+        recorder=recorder, cursor_seq=start_seq,
     )
     return DemoResult(
         scenario="llm_down",
@@ -505,6 +834,7 @@ async def _llm_down(session_factory: async_sessionmaker[AsyncSession]) -> DemoRe
         reserved_balance_minor=await _reserved_balance(session_factory, mandate.mandate_id),
         mandate_id=mandate.mandate_id,
         trace_id=trace_id,
+        order_id=purchase.order_id,
     )
 
 
@@ -522,6 +852,7 @@ async def run_scenario(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     run_id: str | None = None,
+    recorder: DemoRunRecorder = NULL_RECORDER,
 ) -> DemoResult:
     """The `seq_range` reported (and verified) here is the scenario's own
     contiguous span of the chain -- `start_seq+1..end_seq`, captured around
@@ -552,7 +883,7 @@ async def run_scenario(
             start_tail = await uow.audit_log.get_tail()
         start_seq = start_tail[0] if start_tail is not None else 0
 
-        result = await _RUNNERS[scenario](session_factory)
+        result = await _RUNNERS[scenario](session_factory, recorder, start_seq)
 
         async with UnitOfWork(session_factory) as uow:
             end_tail = await uow.audit_log.get_tail()

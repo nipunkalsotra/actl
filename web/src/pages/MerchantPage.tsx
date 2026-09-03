@@ -19,6 +19,11 @@ export function MerchantPage() {
   const [section, setSection] = useState<MerchantSection>(deepLinkOrderId ? "orders" : "overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [explorerOrderId, setExplorerOrderId] = useState<string | null>(deepLinkOrderId);
+  // Lifted (not local to DemoLabSection) so a Trust Lab run stays visible
+  // across switching to another Merchant section and back, per the Trust
+  // Lab spec's "preserve while navigating within Merchant" requirement --
+  // the same reason explorerOrderId itself already lives up here.
+  const [activeDemoRunId, setActiveDemoRunId] = useState<string | null>(null);
 
   // A buyer following a "View proof" link (?order_id=...&panel=proof)
   // should land straight on that order's evidence -- including a second
@@ -52,7 +57,14 @@ export function MerchantPage() {
           {section === "growth" && <GrowthSection />}
           {section === "catalog" && <CatalogSection />}
           {section === "trust" && <TrustAuditSection />}
-          {section === "demo" && <DemoLabSection />}
+          {section === "demo" && (
+            <DemoLabSection
+              activeRunId={activeDemoRunId}
+              onRunIdChange={setActiveDemoRunId}
+              onOpenOrder={setExplorerOrderId}
+              onOpenAuditSection={() => setSection("trust")}
+            />
+          )}
         </main>
       </div>
 

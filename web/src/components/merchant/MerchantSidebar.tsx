@@ -58,7 +58,7 @@ function NavList({
           }`}
         >
           <FlaskConical size={16} />
-          Demo Lab
+          Trust Lab
         </button>
         <p className="mt-1 px-2 text-xs text-coral-700/90">Safe local simulator</p>
       </div>

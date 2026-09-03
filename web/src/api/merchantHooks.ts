@@ -1,7 +1,9 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type Query } from "@tanstack/react-query";
 import { apiGet, apiPost } from "./client";
 import type {
   DemoResultResponse,
+  DemoRun,
+  DemoRunScenario,
   DemoVerifyChainResponse,
   MerchantHealth,
   MerchantKpisResponse,
@@ -59,5 +61,48 @@ export function useRunDemoScenario() {
 export function useRunVerifyChainDemo() {
   return useMutation({
     mutationFn: () => apiPost<DemoVerifyChainResponse>("/merchant/v1/demo/verify-chain", {}),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Trust Lab -- live, pollable demo runs.
+// ---------------------------------------------------------------------------
+
+export function useStartDemoRun() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (scenario: DemoRunScenario) =>
+      apiPost<DemoRun>("/merchant/v1/demo-runs", { scenario }),
+    onSuccess: () => {
+      // A run can create a real order and move real ledger/audit state --
+      // Live Orders/KPIs/Trust should reflect that the next time a judge
+      // looks, not just after an unrelated manual refresh.
+      void queryClient.invalidateQueries({ queryKey: ["merchant", "orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["merchant", "kpis"] });
+      void queryClient.invalidateQueries({ queryKey: ["merchant", "trust"] });
+    },
+  });
+}
+
+const DEMO_RUN_POLL_INTERVAL_MS = 300;
+
+export function useDemoRun(runId: string | null) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: ["merchant", "demo-run", runId],
+    queryFn: () => apiGet<DemoRun>(`/merchant/v1/demo-runs/${runId}`),
+    enabled: runId !== null,
+    refetchInterval: (query: Query<DemoRun>) => {
+      const status = query.state.data?.status;
+      if (status === "passed" || status === "failed") {
+        // Terminal -- one more invalidation in case events arrived after
+        // the mutation's own onSuccess already fired.
+        void queryClient.invalidateQueries({ queryKey: ["merchant", "orders"] });
+        void queryClient.invalidateQueries({ queryKey: ["merchant", "kpis"] });
+        void queryClient.invalidateQueries({ queryKey: ["merchant", "trust"] });
+        return false;
+      }
+      return DEMO_RUN_POLL_INTERVAL_MS;
+    },
   });
 }
