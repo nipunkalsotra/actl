@@ -57,7 +57,13 @@ test.describe("merchant overview: real data, honest states", () => {
     page,
   }) => {
     const chart = page.getByRole("img", { name: "Baseline versus ACTL upsell growth comparison" });
-    const emptyState = page.getByText("Not enough completed sessions to compare yet");
+    // exact: true -- four KpiCard emptyHint props share this same leading
+    // substring ("...compare yet (need 10+ per arm)"), so a plain
+    // substring match resolves to 5 elements on a fresh, real-empty
+    // database instead of the one the chart itself renders.
+    const emptyState = page.getByText("Not enough completed sessions to compare yet", {
+      exact: true,
+    });
     await expect(chart.or(emptyState)).toBeVisible({ timeout: 10_000 });
     // if real data is present, its accessible table fallback must exist too
     if (await chart.isVisible()) {
