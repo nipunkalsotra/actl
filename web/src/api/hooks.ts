@@ -73,9 +73,21 @@ export function useProposeOrder() {
 }
 
 export function useCheckout() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { order_id: string; saga_id: string }) =>
       apiPost<CheckoutResponse>("/buyer/v1/checkout", input),
+    onSuccess: () => {
+      // A real settlement (captured or declined/compensated) changes real
+      // Merchant-visible data (Live Orders, KPIs, audit/trust counters) --
+      // this SPA shares one QueryClient across the Buyer and Merchant
+      // routes, so this invalidation is enough for "already on /merchant
+      // in this tab"; useMerchantOrders/useMerchantKpis/useMerchantTrust's
+      // own polling covers a separate tab/window.
+      void queryClient.invalidateQueries({ queryKey: ["merchant", "orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["merchant", "kpis"] });
+      void queryClient.invalidateQueries({ queryKey: ["merchant", "trust"] });
+    },
   });
 }
 
@@ -106,6 +118,10 @@ export function usePurchaseUpsell() {
       apiPost<UpsellPurchaseResponse>("/buyer/v1/upsell/purchase", input),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["upsell-offers", variables.base_order_id] });
+      // Attach rate / upsell revenue / add-on order data on the Merchant
+      // dashboard are all real-time derived from this same purchase.
+      void queryClient.invalidateQueries({ queryKey: ["merchant", "orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["merchant", "kpis"] });
     },
   });
 }

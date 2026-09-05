@@ -9,7 +9,7 @@ orchestration the `actl demo`/`actl verify-chain` CLI commands already use.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -65,17 +65,30 @@ async def get_health(
     }
 
 
+_ORGANIC_ONLY_BY_SCOPE: dict[str, bool | None] = {
+    "organic": True,
+    "demo": False,
+    "all": None,
+}
+
+
 @router.get("/merchant/v1/orders")
 async def list_orders(
     limit: Annotated[int, Query(gt=0, le=200)] = 50,
+    scope: Literal["organic", "demo", "all"] = "organic",
     uow: UnitOfWork = Depends(get_uow),
 ) -> dict[str, Any]:
     """Order id / SKU / amount / status only -- no buyer name or other PII
     (§18.2's `orders` table never stores one). `source` is null for a real
     organic order, or 'demo_lab'/'growth_simulation' for a guarded
-    scenario/seeded session (migration 0010) -- the frontend badges those
-    distinctly so they are never presented as organic customer growth."""
-    orders = await uow.orders.list_recent(limit)
+    scenario/seeded session (migration 0010).
+
+    `scope` (default `organic`) decides which of those this returns --
+    "Live operations" (organic) and "Demo activity" (demo) are two disjoint
+    views the frontend renders separately, never one badged, mixed list:
+    a Trust Lab click or a growth-simulation session must never inflate
+    what looks like real customer order volume."""
+    orders = await uow.orders.list_recent(limit, organic_only=_ORGANIC_ONLY_BY_SCOPE[scope])
     items: list[dict[str, Any]] = []
     for order in orders:
         quote = await uow.quotes.get(order.quote_id)

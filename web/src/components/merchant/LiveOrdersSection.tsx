@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useMerchantOrders } from "../../api/merchantHooks";
+import { useMerchantOrders, type MerchantOrderScope } from "../../api/merchantHooks";
 import type { MerchantOrderItem } from "../../api/merchantTypes";
 import { formatMinor } from "../../lib/money";
 
@@ -41,26 +41,60 @@ interface LiveOrdersSectionProps {
   onOpenOrder: (orderId: string) => void;
 }
 
+const SCOPE_TABS: { scope: MerchantOrderScope; label: string }[] = [
+  { scope: "organic", label: "Live operations" },
+  { scope: "demo", label: "Demo activity" },
+];
+
 export function LiveOrdersSection({ onOpenOrder }: LiveOrdersSectionProps) {
-  const orders = useMerchantOrders(100);
+  const [scope, setScope] = useState<MerchantOrderScope>("organic");
+  const orders = useMerchantOrders(100, scope);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TrustFilter>("all");
 
+  const items = useMemo(() => orders.data?.items ?? [], [orders.data]);
   const filtered = useMemo(() => {
-    const items = orders.data?.items ?? [];
     const q = search.trim().toLowerCase();
     return items.filter((order) => {
       if (!filterMatches(order, filter)) return false;
       if (!q) return true;
       return order.order_id.toLowerCase().includes(q) || (order.sku ?? "").toLowerCase().includes(q);
     });
-  }, [orders.data, search, filter]);
+  }, [items, search, filter]);
+
+  // Two honestly distinct empty states: no data exists for this scope at
+  // all (never fabricated to look otherwise) vs. real data exists but the
+  // buyer's own search/filter narrowed it to zero rows.
+  const trulyEmpty = !orders.isLoading && !orders.isError && items.length === 0;
+  const filteredToEmpty = !orders.isLoading && !orders.isError && items.length > 0 && filtered.length === 0;
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold text-navy-900">Live orders</h1>
-        <p className="mt-1 text-sm text-navy-500">Real order and payment records from this environment.</p>
+        <p className="mt-1 text-sm text-navy-500">
+          {scope === "organic"
+            ? "Real buyer order and payment records from this environment -- never Trust Lab or growth-simulation activity."
+            : "Trust Lab and growth-simulation rows only -- shown separately, never counted as real customer activity."}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Order scope">
+        {SCOPE_TABS.map((tab) => (
+          <button
+            key={tab.scope}
+            type="button"
+            onClick={() => setScope(tab.scope)}
+            aria-pressed={scope === tab.scope}
+            className={`rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
+              scope === tab.scope
+                ? "bg-ocean-600 text-white"
+                : "bg-card text-navy-700 shadow-card hover:bg-sky-50"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -105,7 +139,25 @@ export function LiveOrdersSection({ onOpenOrder }: LiveOrdersSectionProps) {
         </div>
       )}
 
-      {!orders.isLoading && !orders.isError && filtered.length === 0 && (
+      {trulyEmpty && scope === "organic" && (
+        <div className="rounded-2xl border border-sky-100 bg-card p-8 text-center shadow-card">
+          <p className="text-sm font-semibold text-navy-900">No live bookings yet</p>
+          <p className="mt-1 text-sm text-navy-500">
+            Complete a buyer journey to see live orders, policy decisions, and audit proofs here.
+          </p>
+        </div>
+      )}
+
+      {trulyEmpty && scope === "demo" && (
+        <div className="rounded-2xl border border-sky-100 bg-card p-8 text-center shadow-card">
+          <p className="text-sm font-semibold text-navy-900">No demo activity yet</p>
+          <p className="mt-1 text-sm text-navy-500">
+            Run a Trust Lab scenario or a growth simulation to see it here.
+          </p>
+        </div>
+      )}
+
+      {filteredToEmpty && (
         <div className="rounded-2xl border border-sky-100 bg-card p-8 text-center text-sm text-navy-500 shadow-card">
           No orders match your search.
         </div>

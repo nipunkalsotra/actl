@@ -122,6 +122,28 @@ Groq ever happens. The one opt-in exception — a real Razorpay
 test-mode smoke test — is excluded from normal CI and only runs when
 explicitly enabled (see `tests/` for the marker).
 
+## Resetting local demo data
+
+The Merchant dashboard reflects whatever this database actually holds —
+including any organic orders, Trust Lab runs, or growth-simulation sessions
+a previous local session left behind. There is no reset button in the UI
+and the dashboard never wipes data on load; if a judge/demo run needs a
+genuinely clean, empty state, wipe the local Postgres volume explicitly and
+reseed:
+
+```
+./stop.sh --down          # stop backend/frontend + this project's Postgres/Redis
+docker volume rm actl_postgres_data
+make up                   # fresh Postgres + Redis
+make migrate               # alembic upgrade head
+make seed                  # the six curated Goa hotels only
+./start.sh
+```
+
+This is local-only by construction: it operates on `docker-compose.yml`'s
+own named volume for this checkout, never a remote database, and there is
+no HTTP route that performs it.
+
 ## Demo scenarios
 
 ```
