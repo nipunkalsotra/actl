@@ -15,7 +15,16 @@ test.describe("mobile layout", () => {
     await page.getByRole("button", { name: "Close filters" }).click();
     await expect(page.getByRole("dialog", { name: "Filters" })).toHaveCount(0);
 
-    await page.getByTestId("hotel-select-HTL-GOA-BUDGET-RM").click();
+    // On some viewport-height/font-rendering combinations the first card's
+    // button row lands close enough to the bottom edge to coincide with
+    // the fixed "Open ACTL travel assistant" launcher's own footprint
+    // (bottom-5 right-5) -- geometrically "in view" already, so Playwright's
+    // own scrollIntoViewIfNeeded is a no-op and never nudges it clear.
+    // block: "center" forces a real scroll adjustment (exactly what a real
+    // scrolling user would also naturally do), not a weaker click.
+    const selectButton = page.getByTestId("hotel-select-HTL-GOA-BUDGET-RM");
+    await selectButton.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await selectButton.click();
     await expect(page.getByText("Selected: Budget Room")).toBeVisible();
   });
 
