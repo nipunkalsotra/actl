@@ -93,6 +93,10 @@ class CatalogQuery:
     location_city: str | None = None
     location_country: str | None = None
     max_unit_minor: int | None = None
+    # None (the §14 agent protocol and admin routes): no filter, every real
+    # row visible. True (interfaces.http.routers.buyer only): excludes
+    # Trust Lab / growth-simulation rows from the buyer-facing grid.
+    is_buyer_listable: bool | None = None
     cursor: str | None = None
     limit: int = 20
 
@@ -116,6 +120,7 @@ async def list_catalog(
             location_city=query.location_city,
             location_country=query.location_country,
             max_unit_minor=query.max_unit_minor,
+            is_buyer_listable=query.is_buyer_listable,
             cursor=decoded_cursor,
             limit=query.limit + 1,
         )
@@ -145,6 +150,7 @@ async def list_catalog(
                     "location_city": query.location_city,
                     "location_country": query.location_country,
                     "max_unit_minor": query.max_unit_minor,
+                    "is_buyer_listable": query.is_buyer_listable,
                 },
                 "catalog_version": version,
                 "result_count": len(page),

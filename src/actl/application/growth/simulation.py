@@ -133,6 +133,7 @@ async def _seed_catalog(session_factory: async_sessionmaker[AsyncSession]) -> No
                 taxes_included=True,
                 quote_required=True,
                 version=current_version,
+                is_buyer_listable=False,
             )
         )
         await uow.catalog.upsert_item(
@@ -154,6 +155,7 @@ async def _seed_catalog(session_factory: async_sessionmaker[AsyncSession]) -> No
                 taxes_included=True,
                 quote_required=True,
                 version=current_version,
+                is_buyer_listable=False,
             )
         )
         await uow.commit()

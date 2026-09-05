@@ -1,6 +1,6 @@
 import { Coffee, Star, Waves } from "lucide-react";
 import { formatMinor } from "../lib/money";
-import { hotelDisplayName, hotelGradient } from "../lib/hotelDisplay";
+import { hotelDisplayName, hotelGradient, hotelImage } from "../lib/hotelDisplay";
 import type { CatalogItem } from "../api/types";
 
 interface HotelCardProps {
@@ -12,6 +12,9 @@ interface HotelCardProps {
    * Client-side early guard only -- the server-side gate is still the
    * only thing that can actually deny a purchase. */
   overTripBudget: boolean;
+  /** True only for the first, above-the-fold card -- every other card's
+   * image lazy-loads. */
+  eagerImage?: boolean;
   onSelect: () => void;
   onViewDetails: () => void;
 }
@@ -22,12 +25,15 @@ export function HotelCard({
   selected,
   badge,
   overTripBudget,
+  eagerImage,
   onSelect,
   onViewDetails,
 }: HotelCardProps) {
   const soldOut = item.available_units <= 0;
   const estimatedTotal = item.unit_price_minor * nights;
   const blocked = (soldOut || overTripBudget) && !selected;
+  const image = hotelImage(item.sku);
+  const displayName = hotelDisplayName(item.sku);
 
   return (
     <div
@@ -36,11 +42,18 @@ export function HotelCard({
         selected ? "border-ocean-500 ring-2 ring-ocean-500/30" : "border-sky-100"
       } ${blocked ? "bg-sky-50" : "bg-card"}`}
     >
-      <div className={`relative h-32 bg-gradient-to-br ${hotelGradient(item.sku)} sm:h-36`}>
-        {/* Muted image scrim, not a whole-card opacity fade -- the text
-            panel below stays at full, independently-verified contrast;
-            only the photo signals "unavailable" here. */}
-        {blocked && <div className="absolute inset-0 bg-overlay/50" />}
+      <div
+        className={`relative h-32 overflow-hidden sm:h-36 ${image ? "bg-sky-100" : `bg-gradient-to-br ${hotelGradient(item.sku)}`}`}
+      >
+        {image && (
+          <img
+            src={image}
+            alt={`Representative view of ${displayName}`}
+            loading={eagerImage ? "eager" : "lazy"}
+            decoding="async"
+            className="h-full w-full object-cover"
+          />
+        )}
         {badge && (
           <span className="absolute left-3 top-3 rounded-full bg-ocean-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
             {badge}
@@ -61,7 +74,7 @@ export function HotelCard({
 
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h3 className="truncate text-base font-semibold text-navy-900">{hotelDisplayName(item.sku)}</h3>
+          <h3 className="truncate text-base font-semibold text-navy-900">{displayName}</h3>
           <p className="text-xs text-navy-500">
             {item.location.city}, {item.location.country}
           </p>

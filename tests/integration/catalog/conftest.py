@@ -92,6 +92,7 @@ def make_catalog_item(
     rating: float = 4.0,
     refundable: bool = True,
     version: int = 1,
+    is_buyer_listable: bool = True,
 ) -> CatalogItemRecord:
     return CatalogItemRecord(
         sku=sku,
@@ -107,6 +108,7 @@ def make_catalog_item(
         breakfast_included=False,
         refundable=refundable,
         cancellation_window_h=24,
+        is_buyer_listable=is_buyer_listable,
         instant_confirm=True,
         taxes_included=True,
         quote_required=True,

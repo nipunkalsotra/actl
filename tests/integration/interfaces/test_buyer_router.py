@@ -19,6 +19,8 @@ from tests.integration.catalog.conftest import make_catalog_item
 
 from actl.application.agents.merchant import handle_order_propose
 from actl.application.catalog_service import create_quote
+from actl.application.demo import run_scenario
+from actl.application.growth.simulation import run_growth_simulation
 from actl.config import settings
 from actl.domain.ledger.model import account, net_balance
 from actl.domain.mandate.hashing import compute_spec_hash
@@ -237,6 +239,48 @@ def test_catalog_ranked_by_mandate_filters_out_of_cap_items(buyer_client: BuyerC
     skus = [item["sku"] for item in body["items"]]
     assert "HTL-BUYER-AFFORD" in skus
     assert "HTL-BUYER-TOOPRICEY" not in skus
+
+
+def test_buyer_catalog_excludes_addons_and_real_demo_growth_seed_rows(
+    buyer_client: BuyerClient,
+) -> None:
+    """The exact reported bug: Trust Lab (application.demo) and growth
+    simulation (application.growth.simulation) both upsert real
+    `travel.hotel` rows into the same table the buyer grid reads from.
+    Runs the real seed paths -- not a synthetic is_buyer_listable=False
+    row -- plus a real add-on row, and proves none of them ever reach
+    /buyer/v1/catalog alongside a genuinely curated, listable hotel."""
+    buyer_client.seed(
+        make_catalog_item("HTL-BUYER-LISTED", unit_price_minor=280000, rating=4.4),
+        make_catalog_item(
+            "ADDON-BUYER-TEST", category="travel.addon.flat", unit_price_minor=50000
+        ),
+    )
+
+    assert buyer_client.http.portal is not None
+    provider = SimulatorAdapter(clock=SystemClock())
+    clock = SystemClock()
+    breaker = CircuitBreaker(name="buyer-listable-test", clock=clock)
+
+    async def _run_demo_and_growth() -> None:
+        await run_scenario("declined", buyer_client.session_factory, run_id=new_id("t"))
+        await run_growth_simulation(
+            buyer_client.session_factory,
+            provider,
+            clock,
+            breaker,
+            seed="buyer-listable-test",
+            sessions=0,
+        )
+
+    buyer_client.http.portal.call(_run_demo_and_growth)
+
+    resp = buyer_client.http.get("/buyer/v1/catalog")
+    assert resp.status_code == 200
+    skus = {item["sku"] for item in resp.json()["items"]}
+    assert "HTL-BUYER-LISTED" in skus
+    assert "ADDON-BUYER-TEST" not in skus
+    assert not any(sku.startswith(("HTL-DEMO-", "HTL-GROWTH-")) for sku in skus)
 
 
 def test_full_purchase_happy_path_via_buyer_routes(buyer_client: BuyerClient) -> None:

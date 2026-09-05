@@ -1,5 +1,5 @@
 // Static, purely cosmetic per-SKU presentation (display name + card
-// gradient) -- every commercial fact (price, rating, refundability,
+// image/gradient) -- every commercial fact (price, rating, refundability,
 // availability) still comes only from the real backend catalog response.
 
 const FRIENDLY_NAMES: Record<string, string> = {
@@ -35,4 +35,22 @@ function hashSku(sku: string): number {
 
 export function hotelGradient(sku: string): string {
   return GRADIENTS[hashSku(sku) % GRADIENTS.length];
+}
+
+// Illustrative/representative visuals for the six curated, persistent
+// `travel.hotel` seed SKUs (scripts/seed.py) only -- never a claim about a
+// real named property. HTL-DEMO-*/HTL-GROWTH-* rows (Trust Lab and growth
+// simulation side effects, unbounded and not curated inventory) and any
+// other unmapped SKU intentionally fall through to hotelGradient() instead.
+const HOTEL_IMAGES: Record<string, string> = {
+  "HTL-GOA-SEA-DLX": "/images/hotels/htl-goa-sea-dlx.webp",
+  "HTL-GOA-SUNSET-STD": "/images/hotels/htl-goa-sunset-std.webp",
+  "HTL-GOA-PALM-STE": "/images/hotels/htl-goa-palm-ste.webp",
+  "HTL-GOA-BUDGET-RM": "/images/hotels/htl-goa-budget-rm.webp",
+  "HTL-GOA-CLIFF-VIL": "/images/hotels/htl-goa-cliff-vil.webp",
+  "HTL-GOA-SOLDOUT-RM": "/images/hotels/htl-goa-soldout-rm.webp",
+};
+
+export function hotelImage(sku: string): string | null {
+  return HOTEL_IMAGES[sku] ?? null;
 }

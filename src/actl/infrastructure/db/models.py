@@ -160,6 +160,11 @@ class CatalogItemRow(Base):
     taxes_included: Mapped[bool] = mapped_column(Boolean, nullable=False)
     quote_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
+    # False for Trust Lab (application.demo) and growth-simulation
+    # (application.growth.simulation) rows -- real curated partner
+    # inventory only, never shown in the buyer-facing grid. See migration
+    # 0011 and interfaces.http.routers.buyer's own CatalogQuery.
+    is_buyer_listable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -3,7 +3,12 @@ upsert_item() updates in place, so `make seed` is safe to re-run. Prices,
 ratings, refundability and stock deliberately vary so a later ranking
 phase (P8) and this phase's own filter/paginate tests have something to
 distinguish between; HTL-GOA-SEA-DLX / mrc_seabreeze matches §13.1's own
-worked example exactly.
+worked example exactly. These six are the only rows explicitly marked
+`is_buyer_listable=True` -- Trust Lab (application.demo) and growth
+simulation (application.growth.simulation) seed their own `travel.hotel`
+rows with `is_buyer_listable=False` so they never appear in the buyer-
+facing grid (interfaces.http.routers.buyer), even though every real gate/
+saga/policy check still sees them like any other catalog item.
 """
 
 from __future__ import annotations
@@ -32,6 +37,7 @@ _ITEMS = [
         taxes_included=True,
         quote_required=True,
         version=1,
+        is_buyer_listable=True,
     ),
     CatalogItemRecord(
         sku="HTL-GOA-SUNSET-STD",
@@ -51,6 +57,7 @@ _ITEMS = [
         taxes_included=True,
         quote_required=True,
         version=1,
+        is_buyer_listable=True,
     ),
     CatalogItemRecord(
         sku="HTL-GOA-PALM-STE",
@@ -70,6 +77,7 @@ _ITEMS = [
         taxes_included=True,
         quote_required=True,
         version=1,
+        is_buyer_listable=True,
     ),
     CatalogItemRecord(
         sku="HTL-GOA-BUDGET-RM",
@@ -89,6 +97,7 @@ _ITEMS = [
         taxes_included=False,
         quote_required=True,
         version=1,
+        is_buyer_listable=True,
     ),
     CatalogItemRecord(
         sku="HTL-GOA-CLIFF-VIL",
@@ -108,6 +117,7 @@ _ITEMS = [
         taxes_included=True,
         quote_required=True,
         version=1,
+        is_buyer_listable=True,
     ),
     CatalogItemRecord(
         sku="HTL-GOA-SOLDOUT-RM",
@@ -127,6 +137,7 @@ _ITEMS = [
         taxes_included=True,
         quote_required=True,
         version=1,
+        is_buyer_listable=True,
     ),
 ]
 

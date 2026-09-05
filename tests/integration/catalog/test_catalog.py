@@ -138,3 +138,21 @@ def test_catalog_filters_by_category_location_and_max_price(client: CatalogTestC
     assert "CAT-FILT-CHEAP" in skus
     assert "CAT-FILT-PRICEY" not in skus
     assert "CAT-FILT-ELSEWHERE" not in skus
+
+
+def test_agent_catalog_protocol_is_unaffected_by_buyer_listable(client: CatalogTestClient) -> None:
+    """`is_buyer_listable=False` (Trust Lab / growth-simulation rows) is a
+    buyer-grid-only visibility boundary (interfaces.http.routers.buyer) --
+    the signed §14 agent protocol and this plain REST route must keep
+    seeing every real row, exactly as before this field existed."""
+    client.seed_items(
+        [
+            make_catalog_item("CAT-NOTLISTABLE", unit_price_minor=280000, is_buyer_listable=False),
+            make_catalog_item("CAT-LISTABLE", unit_price_minor=280000, is_buyer_listable=True),
+        ]
+    )
+
+    body = client.http.get("/agent/v1/catalog?category=travel.hotel").json()
+    skus = {item["sku"] for item in body["items"]}
+    assert "CAT-NOTLISTABLE" in skus
+    assert "CAT-LISTABLE" in skus

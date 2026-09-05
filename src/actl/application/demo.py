@@ -190,6 +190,7 @@ async def _seed_item(
                 taxes_included=True,
                 quote_required=True,
                 version=current_version,
+                is_buyer_listable=False,
             )
         )
         await uow.commit()

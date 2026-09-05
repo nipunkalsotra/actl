@@ -34,6 +34,7 @@ class CatalogItemRecord:
     taxes_included: bool
     quote_required: bool
     version: int
+    is_buyer_listable: bool = True
 
 
 def _to_record(row: CatalogItemRow) -> CatalogItemRecord:
@@ -55,6 +56,7 @@ def _to_record(row: CatalogItemRow) -> CatalogItemRecord:
         taxes_included=row.taxes_included,
         quote_required=row.quote_required,
         version=row.version,
+        is_buyer_listable=row.is_buyer_listable,
     )
 
 
@@ -86,6 +88,7 @@ class CatalogRepository:
         row.taxes_included = item.taxes_included
         row.quote_required = item.quote_required
         row.version = item.version
+        row.is_buyer_listable = item.is_buyer_listable
 
     async def get_item(self, sku: str) -> CatalogItemRecord | None:
         row = await self._session.get(CatalogItemRow, sku)
@@ -109,13 +112,20 @@ class CatalogRepository:
         location_city: str | None = None,
         location_country: str | None = None,
         max_unit_minor: int | None = None,
+        is_buyer_listable: bool | None = None,
         cursor: tuple[int, str] | None = None,
         limit: int = 20,
     ) -> list[CatalogItemRecord]:
         """Stable order: (unit_price_minor, sku) ascending. `cursor`, if
         given, is the (unit_price_minor, sku) of the last item on the
         previous page. Returns up to `limit` rows -- callers wanting to
-        detect a further page should request `limit + 1` and trim."""
+        detect a further page should request `limit + 1` and trim.
+
+        `is_buyer_listable`, left `None`, applies no filter at all -- the
+        signed §14 agent protocol and admin routes must keep seeing every
+        real row. Only interfaces.http.routers.buyer's own query passes
+        `True`, to exclude Trust Lab / growth-simulation rows from the
+        buyer-facing grid."""
         stmt = select(CatalogItemRow).order_by(
             CatalogItemRow.unit_price_minor, CatalogItemRow.sku
         )
@@ -127,6 +137,8 @@ class CatalogRepository:
             stmt = stmt.where(CatalogItemRow.location_country == location_country)
         if max_unit_minor is not None:
             stmt = stmt.where(CatalogItemRow.unit_price_minor <= max_unit_minor)
+        if is_buyer_listable is not None:
+            stmt = stmt.where(CatalogItemRow.is_buyer_listable == is_buyer_listable)
         if cursor is not None:
             cursor_price, cursor_sku = cursor
             stmt = stmt.where(

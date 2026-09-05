@@ -3,7 +3,7 @@ import { Coffee, ShieldCheck, Star, Waves, X } from "lucide-react";
 import { useCatalog } from "../api/hooks";
 import { isWithinTripBudget } from "../lib/feasibility";
 import { formatMinor } from "../lib/money";
-import { hotelDisplayName, hotelGradient } from "../lib/hotelDisplay";
+import { hotelDisplayName, hotelGradient, hotelImage } from "../lib/hotelDisplay";
 import { useJourney } from "../state/journeyContext";
 import { Overlay } from "./Overlay";
 
@@ -11,6 +11,7 @@ export function HotelDetailsDrawer() {
   const { detailsSku, setDetailsSku, mandate, filters, setSelectedSku } = useJourney();
   const catalog = useCatalog(mandate?.mandate_id ?? null);
   const item = catalog.data?.items.find((i) => i.sku === detailsSku);
+  const image = item ? hotelImage(item.sku) : null;
 
   return (
     <Overlay open={detailsSku !== null && item !== undefined} onClose={() => setDetailsSku(null)}>
@@ -25,7 +26,18 @@ export function HotelDetailsDrawer() {
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
             className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl bg-card shadow-float"
           >
-            <div className={`relative h-40 bg-gradient-to-br ${hotelGradient(item.sku)}`}>
+            <div
+              className={`relative h-40 overflow-hidden ${image ? "bg-sky-100" : `bg-gradient-to-br ${hotelGradient(item.sku)}`}`}
+            >
+              {image && (
+                <img
+                  src={image}
+                  alt={`Representative view of ${hotelDisplayName(item.sku)}`}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
+              )}
               <button
                 type="button"
                 onClick={() => setDetailsSku(null)}

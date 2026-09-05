@@ -117,7 +117,13 @@ async def get_buyer_catalog(
     feed = await list_catalog(
         uow,
         clock,
-        CatalogQuery(category=_CATEGORY, location_city="Goa", location_country="IN", limit=50),
+        CatalogQuery(
+            category=_CATEGORY,
+            location_city="Goa",
+            location_country="IN",
+            is_buyer_listable=True,
+            limit=50,
+        ),
         actor_id="web_buyer",
     )
     items = list(feed.items)

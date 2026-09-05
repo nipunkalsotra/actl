@@ -129,7 +129,7 @@ export function CatalogGrid() {
 
       {!catalog.isLoading && sorted.length > 0 && (
         <div className="grid grid-cols-1 gap-4 pb-28">
-          {sorted.map((item: CatalogItem) => (
+          {sorted.map((item: CatalogItem, index) => (
             <HotelCard
               key={item.sku}
               item={item}
@@ -137,6 +137,7 @@ export function CatalogGrid() {
               selected={selectedSku === item.sku}
               badge={bestMatchSku === item.sku ? "Best match" : undefined}
               overTripBudget={!isWithinTripBudget(item.unit_price_minor, filters.nights, mandate)}
+              eagerImage={index === 0}
               onSelect={() => setSelectedSku(item.sku)}
               onViewDetails={() => setDetailsSku(item.sku)}
             />
