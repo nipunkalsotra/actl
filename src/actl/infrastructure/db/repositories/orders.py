@@ -145,12 +145,25 @@ class OrderRepository:
         count, total = result.one()
         return int(count), int(total)
 
-    async def list_recent(self, limit: int = 50) -> list[OrderRecord]:
+    async def list_recent(
+        self, limit: int = 50, *, organic_only: bool | None = None
+    ) -> list[OrderRecord]:
         """§28 P12 merchant live-orders view: the newest orders, read-only.
         No filtering by status here -- the caller (interfaces layer) decides
         what to show; this is just "most recent N", the same shape any
-        operational order list needs."""
-        result = await self._session.execute(
-            select(OrderRow).order_by(OrderRow.created_at.desc()).limit(limit)
-        )
+        operational order list needs.
+
+        `organic_only` -- `None` (default): no source filter, every order.
+        `True`: only `source IS NULL` (real buyer activity). `False`: only
+        `source IS NOT NULL` (Demo Lab / growth-simulation rows) -- the same
+        three-way convention `count_and_sum_captured` already uses, so a
+        caller can request "Live operations" vs. "Demo activity" as two
+        disjoint views instead of one badged, mixed list."""
+        stmt = select(OrderRow).order_by(OrderRow.created_at.desc())
+        if organic_only is True:
+            stmt = stmt.where(OrderRow.source.is_(None))
+        elif organic_only is False:
+            stmt = stmt.where(OrderRow.source.is_not(None))
+        stmt = stmt.limit(limit)
+        result = await self._session.execute(stmt)
         return [order_row_to_record(row) for row in result.scalars()]

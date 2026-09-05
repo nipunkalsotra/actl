@@ -57,7 +57,7 @@ test.describe("merchant overview: real data, honest states", () => {
     page,
   }) => {
     const chart = page.getByRole("img", { name: "Baseline versus ACTL upsell growth comparison" });
-    const emptyState = page.getByText("No growth sessions recorded yet");
+    const emptyState = page.getByText("Not enough completed sessions to compare yet");
     await expect(chart.or(emptyState)).toBeVisible({ timeout: 10_000 });
     // if real data is present, its accessible table fallback must exist too
     if (await chart.isVisible()) {

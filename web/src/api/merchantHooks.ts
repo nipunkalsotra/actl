@@ -20,10 +20,21 @@ export function useMerchantHealth() {
   });
 }
 
-export function useMerchantOrders(limit = 50) {
+// A sensible poll while the Merchant page is open: a real Buyer booking or
+// upsell happens on a page this SPA may not have open at all (another tab,
+// or the Buyer route in this same tab) -- useCheckout/usePurchaseUpsell's
+// own invalidation covers the same-tab/same-session case, this covers
+// everything else without needing WebSockets/SSE for a buildathon demo.
+const MERCHANT_LIVE_POLL_INTERVAL_MS = 15_000;
+
+export type MerchantOrderScope = "organic" | "demo" | "all";
+
+export function useMerchantOrders(limit = 50, scope: MerchantOrderScope = "organic") {
   return useQuery({
-    queryKey: ["merchant", "orders", limit],
-    queryFn: () => apiGet<MerchantOrdersResponse>(`/merchant/v1/orders?limit=${limit}`),
+    queryKey: ["merchant", "orders", limit, scope],
+    queryFn: () =>
+      apiGet<MerchantOrdersResponse>(`/merchant/v1/orders?limit=${limit}&scope=${scope}`),
+    refetchInterval: MERCHANT_LIVE_POLL_INTERVAL_MS,
   });
 }
 
@@ -39,6 +50,7 @@ export function useMerchantTrust() {
   return useQuery({
     queryKey: ["merchant", "trust"],
     queryFn: () => apiGet<MerchantTrustSummary>("/merchant/v1/trust"),
+    refetchInterval: MERCHANT_LIVE_POLL_INTERVAL_MS,
   });
 }
 
@@ -46,6 +58,7 @@ export function useMerchantKpis() {
   return useQuery({
     queryKey: ["merchant", "kpis"],
     queryFn: () => apiGet<MerchantKpisResponse>("/merchant/v1/kpis"),
+    refetchInterval: MERCHANT_LIVE_POLL_INTERVAL_MS,
   });
 }
 
