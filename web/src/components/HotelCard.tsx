@@ -38,7 +38,12 @@ export function HotelCard({
   return (
     <div
       data-testid={`hotel-card-${item.sku}`}
-      className={`overflow-hidden rounded-2xl border shadow-card transition-shadow ${
+      // scroll-mb-24: if this card's action row is ever brought into view
+      // via scrollIntoView (keyboard focus, or an explicit scroll), the
+      // browser reserves clearance below it -- enough to clear both the
+      // mobile assistant FAB and the taller sticky trip bar once a hotel
+      // is selected, matching AssistantLauncher's own bottom-24 shift.
+      className={`scroll-mb-24 overflow-hidden rounded-2xl border shadow-card transition-shadow ${
         selected ? "border-ocean-500 ring-2 ring-ocean-500/30" : "border-sky-100"
       } ${blocked ? "bg-sky-50" : "bg-card"}`}
     >
@@ -106,7 +111,11 @@ export function HotelCard({
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+        {/* items-end on every breakpoint, not just sm: and up -- keeps
+            View details/Select on the opposite side of the screen from
+            the mobile assistant FAB (bottom-left), the same anti-collision
+            reasoning as AssistantLauncher's own positioning. */}
+        <div className="flex shrink-0 flex-col items-end gap-2">
           <div className="text-right">
             <p className="text-base font-semibold text-navy-900">{formatMinor(item.unit_price_minor)}</p>
             <p className="text-xs text-navy-500">/night · est. {formatMinor(estimatedTotal)} total</p>

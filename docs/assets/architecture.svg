@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 660" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <title>ACTL architecture: Buyer/Merchant UI to API, Mandate and Policy, the seven Money Action Gates, Payment/Saga/Ledger, the audit hash chain, and optional Monad Testnet anchoring, with the LLM as an optional, fail-safe side path that never authorizes a purchase.</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="arrowDash" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1320" height="660" fill="#0b1220"/>
+
+  <text x="40" y="46" fill="#f8fafc" font-size="26" font-weight="700">ACTL — Agentic Commerce Trust Layer</text>
+  <text x="40" y="72" fill="#94a3b8" font-size="15">Every money action is bounded, gated, audited, and independently verifiable.</text>
+
+  <!-- Main pipeline row -->
+  <!-- 1. UI -->
+  <g>
+    <rect x="40" y="140" width="170" height="100" rx="14" fill="#111c33" stroke="#1e293b" stroke-width="2"/>
+    <text x="125" y="180" fill="#e2e8f0" font-size="16" font-weight="600" text-anchor="middle">Buyer / Merchant</text>
+    <text x="125" y="200" fill="#e2e8f0" font-size="16" font-weight="600" text-anchor="middle">UI</text>
+    <text x="125" y="222" fill="#7dd3fc" font-size="12" text-anchor="middle">React · Vite</text>
+  </g>
+
+  <line x1="210" y1="190" x2="248" y2="190" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 2. API -->
+  <g>
+    <rect x="250" y="140" width="150" height="100" rx="14" fill="#111c33" stroke="#1e293b" stroke-width="2"/>
+    <text x="325" y="185" fill="#e2e8f0" font-size="16" font-weight="600" text-anchor="middle">API</text>
+    <text x="325" y="207" fill="#7dd3fc" font-size="12" text-anchor="middle">FastAPI</text>
+  </g>
+
+  <line x1="400" y1="190" x2="438" y2="190" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 3. Mandate & Policy -->
+  <g>
+    <rect x="440" y="140" width="180" height="100" rx="14" fill="#111c33" stroke="#1e293b" stroke-width="2"/>
+    <text x="530" y="180" fill="#e2e8f0" font-size="15" font-weight="600" text-anchor="middle">Mandate &amp; Policy</text>
+    <text x="530" y="200" fill="#e2e8f0" font-size="15" font-weight="600" text-anchor="middle">Engine</text>
+    <text x="530" y="222" fill="#7dd3fc" font-size="12" text-anchor="middle">deterministic bounds</text>
+  </g>
+
+  <line x1="620" y1="190" x2="658" y2="190" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 4. Seven gates (emphasized, taller) -->
+  <g>
+    <rect x="660" y="110" width="260" height="160" rx="16" fill="#0f2137" stroke="#38bdf8" stroke-width="2.5"/>
+    <text x="790" y="140" fill="#f8fafc" font-size="16" font-weight="700" text-anchor="middle">Money Action Gate</text>
+    <text x="790" y="160" fill="#7dd3fc" font-size="12" text-anchor="middle">G1 – G7, fixed order, one chokepoint</text>
+    <g font-size="11.5" fill="#cbd5e1">
+      <text x="678" y="182">G1 mandate validity</text>
+      <text x="678" y="199">G2 decision binding</text>
+      <text x="678" y="216">G3 policy verdict</text>
+      <text x="678" y="233">G4 budget reservation</text>
+      <text x="678" y="250">G5 freshness (quote/catalog)</text>
+      <text x="902" y="182" text-anchor="end">G6 idempotency</text>
+      <text x="902" y="199" text-anchor="end">G7 write-ahead audit</text>
+      <text x="902" y="216" text-anchor="end">→ execute</text>
+    </g>
+  </g>
+
+  <line x1="920" y1="190" x2="958" y2="190" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 5. Payment/Saga/Ledger -->
+  <g>
+    <rect x="960" y="140" width="180" height="100" rx="14" fill="#111c33" stroke="#1e293b" stroke-width="2"/>
+    <text x="1050" y="180" fill="#e2e8f0" font-size="15" font-weight="600" text-anchor="middle">Payment · Saga</text>
+    <text x="1050" y="200" fill="#e2e8f0" font-size="15" font-weight="600" text-anchor="middle">· Ledger</text>
+    <text x="1050" y="222" fill="#7dd3fc" font-size="12" text-anchor="middle">Razorpay test-mode / simulator</text>
+  </g>
+
+  <line x1="1050" y1="240" x2="1050" y2="278" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 6. Audit chain -->
+  <g>
+    <rect x="890" y="280" width="320" height="90" rx="14" fill="#111c33" stroke="#1e293b" stroke-width="2"/>
+    <text x="1050" y="316" fill="#e2e8f0" font-size="16" font-weight="600" text-anchor="middle">Append-only Audit Hash Chain</text>
+    <text x="1050" y="338" fill="#7dd3fc" font-size="12" text-anchor="middle">Merkle checkpoints · offline-verifiable, stdlib only</text>
+    <text x="1050" y="356" fill="#7dd3fc" font-size="12" text-anchor="middle">/audit/explain/{order_id}</text>
+  </g>
+
+  <line x1="1050" y1="370" x2="1050" y2="410" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6,5" marker-end="url(#arrowDash)"/>
+
+  <!-- 7. Monad -->
+  <g>
+    <rect x="890" y="412" width="320" height="80" rx="14" fill="#0e1526" stroke="#334155" stroke-width="2" stroke-dasharray="4,4"/>
+    <text x="1050" y="440" fill="#e2e8f0" font-size="15" font-weight="600" text-anchor="middle">Monad Testnet anchor</text>
+    <text x="1050" y="460" fill="#94a3b8" font-size="12" text-anchor="middle">optional · checkpoint roots only · async, never blocking</text>
+    <text x="1050" y="478" fill="#94a3b8" font-size="12" text-anchor="middle">default: NoopAnchor</text>
+  </g>
+
+  <!-- LLM side path -->
+  <g>
+    <rect x="440" y="440" width="220" height="110" rx="14" fill="#0e1526" stroke="#334155" stroke-width="2" stroke-dasharray="4,4"/>
+    <text x="550" y="470" fill="#e2e8f0" font-size="15" font-weight="600" text-anchor="middle">LLM (Groq)</text>
+    <text x="550" y="492" fill="#94a3b8" font-size="12" text-anchor="middle">optional · extract / rank / narrate</text>
+    <text x="550" y="510" fill="#fca5a5" font-size="12" font-weight="600" text-anchor="middle">never authorizes a purchase</text>
+    <text x="550" y="530" fill="#94a3b8" font-size="12" text-anchor="middle">deterministic fallback always available</text>
+  </g>
+  <line x1="530" y1="240" x2="530" y2="438" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6,5"/>
+  <line x1="530" y1="438" x2="530" y2="242" stroke="none"/>
+  <path d="M 530 438 L 530 242" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6,5" marker-end="url(#arrowDash)"/>
+  <text x="545" y="360" fill="#94a3b8" font-size="11" transform="rotate(90 545 360)" text-anchor="middle">intent / ranking / narration only</text>
+
+  <!-- Legend -->
+  <g font-size="12" fill="#94a3b8">
+    <line x1="40" y1="600" x2="70" y2="600" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <text x="80" y="604">Money-moving critical path</text>
+    <line x1="290" y1="600" x2="320" y2="600" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6,5" marker-end="url(#arrowDash)"/>
+    <text x="330" y="604">Optional / never blocks a purchase</text>
+  </g>
+  <text x="40" y="630" fill="#64748b" font-size="12">Full design: docs/architecture.md · Protocol reference: docs/protocol.md</text>
+</svg>

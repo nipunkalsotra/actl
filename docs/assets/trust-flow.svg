@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 480" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <title>Trust flow: intent to quote to the seven gates to payment to settlement on the happy path, and a second branch showing failure leading to compensation, a reserved balance of zero, and an auditable proof either way.</title>
+  <defs>
+    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#fca5a5"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1100" height="480" fill="#0b1220"/>
+  <text x="30" y="38" fill="#f8fafc" font-size="20" font-weight="700">Two outcomes, both provable</text>
+
+  <!-- happy path row -->
+  <g font-size="13" fill="#e2e8f0">
+    <rect x="30" y="70" width="120" height="60" rx="10" fill="#111c33" stroke="#1e293b" stroke-width="2"/>
+    <text x="90" y="105" text-anchor="middle">Intent</text>
+
+    <line x1="150" y1="100" x2="180" y2="100" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#a1)"/>
+    <rect x="182" y="70" width="120" height="60" rx="10" fill="#111c33" stroke="#1e293b" stroke-width="2"/>
+    <text x="242" y="105" text-anchor="middle">Quote</text>
+
+    <line x1="302" y1="100" x2="332" y2="100" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#a1)"/>
+    <rect x="334" y="60" width="220" height="80" rx="12" fill="#0f2137" stroke="#38bdf8" stroke-width="2.5"/>
+    <text x="444" y="95" text-anchor="middle" font-weight="700" fill="#f8fafc">G1 – G7</text>
+    <text x="444" y="115" text-anchor="middle" font-size="11.5" fill="#7dd3fc">mandate → policy → budget →</text>
+    <text x="444" y="130" text-anchor="middle" font-size="11.5" fill="#7dd3fc">freshness → idempotency → audit</text>
+
+    <line x1="554" y1="100" x2="584" y2="100" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#a1)"/>
+    <rect x="586" y="70" width="130" height="60" rx="10" fill="#111c33" stroke="#1e293b" stroke-width="2"/>
+    <text x="651" y="105" text-anchor="middle">Payment</text>
+
+    <line x1="716" y1="100" x2="746" y2="100" stroke="#7dd3fc" stroke-width="2.5" marker-end="url(#a1)"/>
+    <rect x="748" y="60" width="180" height="80" rx="12" fill="#111c33" stroke="#22c55e" stroke-width="2.5"/>
+    <text x="838" y="92" text-anchor="middle" font-weight="700" fill="#86efac">Settlement</text>
+    <text x="838" y="112" text-anchor="middle" font-size="11.5" fill="#94a3b8">ledger settled</text>
+    <text x="838" y="127" text-anchor="middle" font-size="11.5" fill="#94a3b8">receipt issued</text>
+  </g>
+
+  <text x="30" y="185" fill="#94a3b8" font-size="13">Any G1–G7 denial, or a declined payment, takes the second branch instead:</text>
+
+  <!-- failure branch -->
+  <line x1="444" y1="140" x2="444" y2="215" stroke="#fca5a5" stroke-width="2" stroke-dasharray="6,5" marker-end="url(#a2)"/>
+
+  <g font-size="13" fill="#e2e8f0">
+    <rect x="334" y="220" width="220" height="60" rx="10" fill="#2a1418" stroke="#7f1d1d" stroke-width="2"/>
+    <text x="444" y="255" text-anchor="middle" fill="#fca5a5">Denied / declined</text>
+
+    <line x1="444" y1="280" x2="444" y2="310" stroke="#fca5a5" stroke-width="2" marker-end="url(#a2)"/>
+    <rect x="334" y="312" width="220" height="60" rx="10" fill="#111c33" stroke="#1e293b" stroke-width="2"/>
+    <text x="444" y="337" text-anchor="middle">Compensation</text>
+    <text x="444" y="356" text-anchor="middle" font-size="11.5" fill="#94a3b8">saga runs in reverse, no blind retry</text>
+
+    <line x1="444" y1="372" x2="444" y2="393" stroke="#fca5a5" stroke-width="2" marker-end="url(#a2)"/>
+    <rect x="304" y="395" width="280" height="50" rx="10" fill="#111c33" stroke="#1e293b" stroke-width="2"/>
+    <text x="444" y="425" text-anchor="middle">Reserved balance = ₹0</text>
+  </g>
+
+  <!-- both branches converge on auditable proof -->
+  <rect x="980" y="60" width="90" height="385" rx="14" fill="#0f2137" stroke="#38bdf8" stroke-width="2.5"/>
+  <text x="1025" y="245" font-weight="700" fill="#f8fafc" font-size="14" text-anchor="middle" transform="rotate(90 1025 245)">Auditable proof, either way</text>
+
+  <line x1="928" y1="100" x2="978" y2="100" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4,4"/>
+  <line x1="584" y1="420" x2="978" y2="420" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4,4"/>
+
+  <text x="30" y="470" fill="#64748b" font-size="12">Every state above is a real, persisted, independently-verifiable audit entry — never a frontend-only status.</text>
+</svg>

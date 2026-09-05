@@ -128,7 +128,10 @@ export function CatalogGrid() {
       )}
 
       {!catalog.isLoading && sorted.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 pb-28">
+        // pb-36: comfortable clearance below the last card for the fixed
+        // mobile assistant FAB + a device's own safe-area inset, and for
+        // the taller sticky trip bar once a hotel is selected.
+        <div className="grid grid-cols-1 gap-4 pb-36">
           {sorted.map((item: CatalogItem, index) => (
             <HotelCard
               key={item.sku}
