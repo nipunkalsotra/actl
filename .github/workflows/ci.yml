@@ -104,3 +104,149 @@ jobs:
         run: |
           make bundle
           cd audit_bundle && env -i PATH=/usr/bin:/bin python3 verify_bundle.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    # Separate job, separate runner, own throwaway Postgres/Redis -- a
+    # frontend failure is diagnosable on its own, and it never weakens or
+    # duplicates the `ci` job's own testcontainers-based test work above.
+    # This is a different use of the same two service images: here they
+    # back one real running backend process Playwright drives over real
+    # HTTP, not per-test throwaway containers.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: actl
+          POSTGRES_PASSWORD: actl
+          POSTGRES_DB: actl
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U actl -d actl"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      APP_ENV: ci
+      LLM_ENABLED: "false"
+      PAYMENT_PROVIDER: simulator
+      ANCHOR_PROVIDER: noop
+      DATABASE_URL: postgresql+asyncpg://actl:actl@localhost:5432/actl
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: uv sync --all-groups
+
+      - name: Migrate
+        run: uv run alembic upgrade head
+
+      - name: Seed curated demo catalog
+        run: uv run python scripts/seed.py
+
+      # nohup + a PID file, not a plain `&`: the backgrounded process must
+      # survive this step's own shell exiting so later steps in the same
+      # job can still reach it, and the PID file lets the final cleanup
+      # step stop it explicitly rather than relying on runner teardown.
+      - name: Start backend API
+        run: |
+          nohup uv run uvicorn actl.main:app --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
+          echo $! > backend.pid
+
+      - name: Wait for backend readiness
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/healthz > /dev/null; then
+              echo "backend healthy after ${i} attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "backend did not become healthy within the bounded retry budget"
+          cat backend.log
+          exit 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      # Reproducible install from the committed lockfile -- never a bare
+      # `npm install`, which can silently drift the resolved tree.
+      - name: Install frontend dependencies
+        run: npm --prefix web ci
+
+      - name: Frontend build
+        run: npm --prefix web run build
+
+      - name: Frontend lint
+        run: npm --prefix web run lint
+
+      # Resolves to this repository's own locally-installed @playwright/test
+      # (node_modules/web, pinned by package-lock.json) -- never a global
+      # or otherwise-unrelated Playwright install. Only chromium: both
+      # projects in web/playwright.config.ts (desktop + Pixel 7 mobile
+      # emulation) are Chromium-based by design in this sandboxed build.
+      - name: Install Playwright browsers
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Start frontend dev server
+        run: |
+          nohup npm --prefix web run dev > frontend.log 2>&1 &
+          echo $! > frontend.pid
+
+      - name: Wait for frontend readiness
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5173/ > /dev/null; then
+              echo "frontend ready after ${i} attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "frontend did not become ready within the bounded retry budget"
+          cat frontend.log
+          exit 1
+
+      - name: Playwright end-to-end suite
+        working-directory: web
+        run: npx playwright test
+
+      # Only on failure, and only the suite's own output (failure
+      # screenshots/traces/error-context under web/test-results/ --
+      # screenshot: "only-on-failure" in playwright.config.ts) -- never an
+      # .env (none is ever created in this job) and never a backend/
+      # frontend log, which is printed inline above instead of uploaded.
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/test-results/
+          retention-days: 5
+          if-no-files-found: ignore
+
+      - name: Stop background services
+        if: always()
+        run: |
+          [ -f frontend.pid ] && kill "$(cat frontend.pid)" 2>/dev/null || true
+          [ -f backend.pid ] && kill "$(cat backend.pid)" 2>/dev/null || true
