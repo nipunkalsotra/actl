@@ -13,7 +13,9 @@ mandate, gated through one deterministic chokepoint before any charge, and
 recorded in an append-only, hash-chained audit log a third party can
 verify offline with nothing but Python's standard library.
 
-**🎥 [Watch the live demo](https://drive.google.com/file/d/1vrrD7BGgaLV9tWe2LFpb9mPdECikr3T-/view?usp=drivesdk)**
+### 🎥 [▶ WATCH THE LIVE DEMO](https://drive.google.com/file/d/1vrrD7BGgaLV9tWe2LFpb9mPdECikr3T-/view?usp=drivesdk)
+
+[![Watch the live demo](https://img.shields.io/badge/🎥_LIVE_DEMO-Watch_Now-4285F4?style=for-the-badge&logo=googledrive&logoColor=white)](https://drive.google.com/file/d/1vrrD7BGgaLV9tWe2LFpb9mPdECikr3T-/view?usp=drivesdk)
 
 [Reviewer path](#reviewer-path) ·
 [How it works](#how-it-works) ·
